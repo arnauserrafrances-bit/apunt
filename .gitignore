@@ -1,0 +1,15 @@
+# Secrets
+.env
+
+# Base de dades local (conté noms reals d'alumnes)
+data/*.db
+data/*.db-journal
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+
+# macOS
+.DS_Store
