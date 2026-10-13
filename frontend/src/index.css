@@ -1,0 +1,71 @@
+@import "tailwindcss";
+@import "@fontsource/atkinson-hyperlegible/400.css";
+@import "@fontsource/atkinson-hyperlegible/700.css";
+
+/* Pocs colors: paper i tinta, un sol color per a les accions,
+   ambre només per a avisos i vermell només per esborrar. */
+@theme {
+  --font-sans: "Atkinson Hyperlegible", ui-sans-serif, system-ui, sans-serif;
+
+  --color-paper: #f8f6f2;
+  --color-card: #ffffff;
+  --color-ink: #23211e;
+  --color-muted: #6c675f;
+  --color-line: #e4dfd6;
+  --color-hover: #efebe4;
+
+  --color-action: #2e3a36;
+  --color-action-hover: #1f2926;
+
+  --color-warn-bg: #fcf1d8;
+  --color-warn-line: #ecd08a;
+  --color-warn-ink: #7a4f00;
+
+  --color-danger: #b42318;
+}
+
+html {
+  font-size: 112.5%; /* 18px */
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background: var(--color-paper);
+  color: var(--color-ink);
+  line-height: 1.55;
+}
+
+:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--color-action) 45%, transparent);
+  outline-offset: 2px;
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-lg px-4 font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-45;
+  }
+  .btn-primary {
+    @apply bg-action text-white hover:bg-action-hover;
+  }
+  .btn-secondary {
+    @apply border border-line bg-card text-ink hover:bg-hover;
+  }
+  .btn-ghost {
+    @apply px-3 font-normal text-muted hover:bg-hover hover:text-ink;
+  }
+  .btn-danger {
+    @apply bg-danger text-white hover:opacity-90;
+  }
+  .field {
+    @apply min-h-11 w-full rounded-lg border border-line bg-card px-3 py-2 text-ink placeholder:text-muted/70 focus:border-action focus:outline-none;
+  }
+  .card {
+    @apply rounded-xl border border-line bg-card;
+  }
+  .warn-box {
+    @apply rounded-lg border border-warn-line bg-warn-bg px-4 py-3 text-warn-ink;
+  }
+  .kbd {
+    @apply rounded border border-line bg-card px-1.5 py-0.5 font-sans text-sm text-muted;
+  }
+}

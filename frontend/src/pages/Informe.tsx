@@ -1,0 +1,679 @@
+import { Fragment, useMemo, useState, type ReactNode } from "react";
+import { Link, useNavigate, useParams } from "react-router";
+import { ConfirmDialog } from "../components/ConfirmDialog";
+import { PageTitle } from "../components/Layout";
+import { StudentSearch } from "../components/StudentSearch";
+import { useToast } from "../components/Toast";
+import { TERMS } from "../config";
+import { areaReportText, fakeAreaReport } from "../data/fakeReport";
+import {
+  analyze,
+  countNameLeaks,
+  deanonymize,
+  pendingAsks,
+  resolve,
+  type Decision,
+  type Segment,
+} from "../lib/anonymize";
+import { fullName } from "../lib/names";
+import { formatDate, plural } from "../lib/text";
+import { reportKey, useStore } from "../store/AppStore";
+import type { Area, AreaReport, Note, Report, Student } from "../types";
+
+// ------------------------------------------------------------------ Llista
+
+export function InformeIndex() {
+  const { students, reports, currentTerm } = useStore();
+  const navigate = useNavigate();
+
+  const status = (s: Student) => {
+    const r = reports[reportKey(s.id, currentTerm)];
+    if (!r) return null;
+    const ok = r.areas.filter((a) => a.approved).length;
+    return ok === r.areas.length ? "Aprovat" : `En revisió (${ok}/${r.areas.length})`;
+  };
+
+  return (
+    <div className="mx-auto max-w-3xl">
+      <PageTitle title="Informe" subtitle={`${TERMS[currentTerm]} · Tria l'alumne`} />
+      <Steps current={1} />
+      <StudentSearch
+        autoFocus
+        students={students}
+        value={null}
+        onChange={(s) => s && navigate(`/informe/${s.code}`)}
+      />
+      <ul className="mt-6 divide-y divide-line rounded-xl border border-line bg-card">
+        {students.map((s) => {
+          const st = status(s);
+          return (
+            <li key={s.id}>
+              <Link to={`/informe/${s.code}`} className="flex items-center gap-3 px-4 py-2.5 hover:bg-hover">
+                <span className="w-12 shrink-0 font-bold text-muted">{s.code}</span>
+                <span className="flex-1">{fullName(s)}</span>
+                {st && <span className="text-sm text-muted">{st}</span>}
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
+function Steps({ current }: { current: 1 | 2 | 3 | 4 }) {
+  const steps = ["Alumne", "Què s'envia", "Revisa i aprova", "Copia"];
+  return (
+    <ol className="mb-8 flex flex-wrap gap-x-2 gap-y-1 text-base">
+      {steps.map((label, i) => {
+        const n = i + 1;
+        return (
+          <li key={label} className="flex items-center gap-2">
+            {i > 0 && <span className="text-line">—</span>}
+            <span
+              className={`flex h-7 w-7 items-center justify-center rounded-full text-sm font-bold ${
+                n === current ? "bg-action text-white" : n < current ? "bg-hover text-ink" : "border border-line text-muted"
+              }`}
+            >
+              {n < current ? "✓" : n}
+            </span>
+            <span className={n === current ? "font-bold" : "text-muted"}>{label}</span>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+// ------------------------------------------------------------------ Alumne
+
+export function InformeAlumne() {
+  const store = useStore();
+  const { code } = useParams();
+  const student = store.students.find((s) => s.code === code);
+  const report = student ? store.reports[reportKey(student.id, store.currentTerm)] : undefined;
+
+  if (!student) {
+    return (
+      <div className="mx-auto max-w-3xl">
+        <p className="text-muted">No existeix cap alumne amb el codi {code}.</p>
+        <Link to="/informe" className="font-bold underline">
+          Torna a la llista
+        </Link>
+      </div>
+    );
+  }
+
+  const allApproved = !!report && report.areas.every((a) => a.approved);
+
+  return (
+    <div className="mx-auto max-w-3xl">
+      <Link to="/informe" className="text-base text-muted hover:text-ink">
+        ← Tots els alumnes
+      </Link>
+      <div className="mt-3">
+        <PageTitle
+          title={fullName(student)}
+          subtitle={`${student.code} · Informe del ${TERMS[store.currentTerm]}`}
+        />
+      </div>
+      <Steps current={!report ? 2 : allApproved ? 4 : 3} />
+      {report ? (
+        <Review student={student} report={report} />
+      ) : (
+        <Preview key={`${student.id}-${store.currentTerm}`} student={student} />
+      )}
+    </div>
+  );
+}
+
+// ------------------------------------------------------------------ Pas 2: què s'envia
+
+const INSTRUCTIONS =
+  "Escriu en català entre 6 i 8 frases per a cada àrea sobre l'alumne indicat. " +
+  "Fes servir només la informació de les notes. No inventis res i no exageris.";
+
+interface NoteSegments {
+  note: Note;
+  segments: Segment[];
+}
+
+function Preview({ student }: { student: Student }) {
+  const store = useStore();
+  const { students, areas, notes, currentTerm } = store;
+  const [decisions, setDecisions] = useState<Record<string, Decision>>({});
+  const [phase, setPhase] = useState<"idle" | "writing" | "reviewing">("idle");
+
+  const byArea = useMemo(() => {
+    const list: { area: Area; items: NoteSegments[] }[] = [];
+    for (const area of areas) {
+      const items = notes
+        .filter((n) => n.studentId === student.id && n.areaId === area.id && n.term === currentTerm)
+        .sort((a, b) => a.date.localeCompare(b.date) || a.createdAt - b.createdAt)
+        .map((note) => ({ note, segments: analyze(note.text, students, `${note.id}:`) }));
+      list.push({ area, items });
+    }
+    return list;
+  }, [areas, notes, students, student.id, currentTerm]);
+
+  const withNotes = byArea.filter((a) => a.items.length);
+  const empty = byArea.filter((a) => !a.items.length).map((a) => a.area);
+  const allItems = withNotes.flatMap((a) => a.items);
+  const asks = allItems.flatMap(({ note, segments }) =>
+    segments.flatMap((s) => (s.kind === "ask" ? [{ note, ask: s }] : [])),
+  );
+  const pending = allItems.flatMap((i) => pendingAsks(i.segments, decisions)).length;
+
+  const outgoing = [
+    INSTRUCTIONS,
+    "",
+    `Alumne: ${student.code}`,
+    `Trimestre: ${TERMS[currentTerm]}`,
+    ...withNotes.flatMap(({ area, items }) => [
+      "",
+      area.name,
+      ...items.map(({ note, segments }) => `- ${formatDate(note.date)}: ${resolve(segments, decisions, students)}`),
+    ]),
+  ].join("\n");
+  const leaks = countNameLeaks(outgoing, students);
+  const replaced =
+    allItems.flatMap((i) => i.segments).filter((s) => s.kind === "name").length +
+    Object.values(decisions).filter((d) => d !== "word").length;
+  const markedWords = Object.values(decisions).filter((d) => d === "word").length;
+
+  const generate = () => {
+    setPhase("writing");
+    window.setTimeout(() => setPhase("reviewing"), 1200);
+    window.setTimeout(() => {
+      const report: Report = {
+        studentId: student.id,
+        term: currentTerm,
+        emptyAreaIds: empty.map((a) => a.id),
+        areas: withNotes.map(({ area, items }) =>
+          fakeAreaReport(
+            area.id,
+            student.code,
+            items.map((i) => resolve(i.segments, decisions, students)),
+            student.id,
+          ),
+        ),
+      };
+      store.saveReport(report);
+    }, 2200);
+  };
+
+  if (!withNotes.length) {
+    return (
+      <div className="warn-box">
+        {student.firstName} no té cap nota al {TERMS[currentTerm]}. No es pot escriure l'informe
+        sense notes.{" "}
+        <Link to={`/?alumne=${student.code}`} className="font-bold underline">
+          Escriu-ne una
+        </Link>
+      </div>
+    );
+  }
+
+  if (phase !== "idle") {
+    return (
+      <div className="card flex items-center gap-4 p-6 text-lg">
+        <span className="h-5 w-5 animate-spin rounded-full border-2 border-line border-t-action" />
+        {phase === "writing" ? "Redactant l'informe…" : "Revisant cada frase amb les notes…"}
+        <span className="text-sm text-muted">(simulat)</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {asks.length > 0 && (
+        <section className="space-y-3">
+          <h2 className="text-xl font-bold">
+            {pending > 0
+              ? `Decideix ${plural(pending, "paraula", "paraules")}`
+              : "Paraules decidides"}
+          </h2>
+          <p className="text-muted">
+            No sabem segur si aquestes paraules són un nom. Si ho són, es canviaran pel codi.
+          </p>
+          {asks.map(({ note, ask }) => (
+            <AskCard
+              key={ask.id}
+              note={note}
+              ask={ask}
+              students={students}
+              decision={decisions[ask.id]}
+              onDecide={(d) => setDecisions((prev) => ({ ...prev, [ask.id]: d }))}
+            />
+          ))}
+        </section>
+      )}
+
+      <section>
+        <h2 className="text-xl font-bold">Això és exactament el que s'enviarà</h2>
+        <p className="mb-3 text-muted">
+          Els noms ja són codis. <span className="rounded bg-hover px-1 font-bold text-ink">A-01</span>{" "}
+          = nom canviat.
+        </p>
+        <div className="card p-5 leading-relaxed whitespace-pre-wrap">
+          <p className="text-muted">{INSTRUCTIONS}</p>
+          <p className="mt-4">
+            Alumne: <Code>{student.code}</Code>
+            {"\n"}Trimestre: {TERMS[currentTerm]}
+          </p>
+          {withNotes.map(({ area, items }) => (
+            <div key={area.id} className="mt-4">
+              <div className="font-bold">{area.name}</div>
+              {items.map(({ note, segments }) => (
+                <div key={note.id}>
+                  - {formatDate(note.date)}: <Segments segments={segments} decisions={decisions} students={students} />
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {empty.length > 0 && (
+        <div className="warn-box">
+          <strong>Sense notes, no s'escriurà res:</strong> {empty.map((a) => a.name).join(", ")}.
+        </div>
+      )}
+
+      <section className="card space-y-1 p-5">
+        <Check ok>{plural(replaced, "nom canviat", "noms canviats")} per codis</Check>
+        {markedWords > 0 && (
+          <Check ok>{plural(markedWords, "paraula marcada", "paraules marcades")} com a normals</Check>
+        )}
+        <Check ok={pending === 0}>
+          {pending === 0 ? "Cap paraula pendent de decidir" : `${plural(pending, "paraula", "paraules")} per decidir`}
+        </Check>
+        <Check ok={leaks === 0}>
+          {leaks === 0 ? "Comprovació final: cap nom real al text" : `Comprovació final: queden ${leaks} noms`}
+        </Check>
+      </section>
+
+      <div className="flex flex-wrap items-center gap-4">
+        <button className="btn btn-primary px-6 text-lg" disabled={pending > 0 || leaks > 0} onClick={generate}>
+          Confirma i genera l'informe
+        </button>
+        {pending > 0 && <span className="text-warn-ink">Primer decideix les paraules de dalt.</span>}
+      </div>
+    </div>
+  );
+}
+
+function Code({ children }: { children: string }) {
+  return <span className="rounded bg-hover px-1 font-bold">{children}</span>;
+}
+
+function Check({ ok, children }: { ok: boolean; children: ReactNode }) {
+  return (
+    <div className={`flex gap-2 ${ok ? "" : "font-bold text-warn-ink"}`}>
+      <span aria-hidden>{ok ? "✓" : "!"}</span>
+      <span>{children}</span>
+    </div>
+  );
+}
+
+function Segments({
+  segments,
+  decisions,
+  students,
+}: {
+  segments: Segment[];
+  decisions: Record<string, Decision>;
+  students: Student[];
+}) {
+  return (
+    <>
+      {segments.map((s, i) => {
+        if (s.kind === "text") return <Fragment key={i}>{s.text}</Fragment>;
+        if (s.kind === "name") return <Code key={i}>{s.code}</Code>;
+        const d = decisions[s.id];
+        if (d === undefined) {
+          return (
+            <a
+              key={i}
+              href={`#ask-${s.id}`}
+              className="rounded bg-warn-bg px-1 font-bold text-warn-ink underline decoration-dotted"
+              title="Pendent de decidir: no s'enviarà fins que ho decideixis"
+            >
+              ?
+            </a>
+          );
+        }
+        if (d === "word") return <Fragment key={i}>{s.original}</Fragment>;
+        return <Code key={i}>{students.find((st) => st.id === d)?.code ?? "?"}</Code>;
+      })}
+    </>
+  );
+}
+
+function AskCard({
+  note,
+  ask,
+  students,
+  decision,
+  onDecide,
+}: {
+  note: Note;
+  ask: Extract<Segment, { kind: "ask" }>;
+  students: Student[];
+  decision: Decision | undefined;
+  onDecide: (d: Decision) => void;
+}) {
+  const start = Number(ask.id.split(":")[1]);
+  const before = note.text.slice(0, start);
+  const after = note.text.slice(start + ask.original.length);
+  const choice = (d: Decision, label: string) => (
+    <button
+      key={String(d)}
+      onClick={() => onDecide(d)}
+      aria-pressed={decision === d}
+      className={`btn min-h-10 border text-base ${
+        decision === d ? "border-action bg-action text-white" : "border-line bg-card font-normal hover:bg-hover"
+      }`}
+    >
+      {label}
+    </button>
+  );
+  return (
+    <div
+      id={`ask-${ask.id}`}
+      className={`scroll-mt-24 rounded-xl border p-4 ${decision === undefined ? "border-warn-line bg-warn-bg" : "border-line bg-card"}`}
+    >
+      <p className="text-lg">
+        «{before}
+        <mark className="rounded bg-white px-1 font-bold text-ink ring-2 ring-warn-line">{ask.original}</mark>
+        {after}»
+      </p>
+      <p className="mt-1 text-sm text-muted">{ask.reason}</p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {ask.candidates.map((id) => {
+          const s = students.find((st) => st.id === id)!;
+          return choice(id, `És ${s.code} · ${fullName(s)}`);
+        })}
+        {ask.allowWord && choice("word", "És una paraula normal")}
+      </div>
+    </div>
+  );
+}
+
+// ------------------------------------------------------------------ Pas 3 i 4: revisa, aprova i copia
+
+function Review({ student, report }: { student: Student; report: Report }) {
+  const store = useStore();
+  const toast = useToast();
+  const [showNames, setShowNames] = useState(false);
+  const [restart, setRestart] = useState(false);
+
+  const areaById = new Map(store.areas.map((a) => [a.id, a]));
+  const ordered = store.areas
+    .map((a) => report.areas.find((r) => r.areaId === a.id))
+    .filter((r): r is AreaReport => !!r);
+  const approved = ordered.filter((a) => a.approved).length;
+  const allApproved = approved === ordered.length;
+  const empty = report.emptyAreaIds.map((id) => areaById.get(id)?.name).filter(Boolean);
+
+  const updateArea = (areaId: number, changes: Partial<AreaReport>) =>
+    store.saveReport({
+      ...report,
+      areas: report.areas.map((a) => (a.areaId === areaId ? { ...a, ...changes } : a)),
+    });
+
+  const display = (t: string) => (showNames ? deanonymize(t, store.students) : t);
+
+  const finalText = [
+    `${fullName(student)} · ${TERMS[report.term]}`,
+    ...ordered.map((r) => `\n${areaById.get(r.areaId)?.name}\n${deanonymize(areaReportText(r), store.students)}`),
+  ].join("\n");
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(finalText);
+      toast({ message: "Informe copiat amb els noms. Ja el pots enganxar." });
+    } catch {
+      toast({ message: "No s'ha pogut copiar. Selecciona el text i copia'l a mà." });
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-lg">
+          <strong>
+            {approved} de {ordered.length}
+          </strong>{" "}
+          àrees aprovades
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <label className="flex min-h-11 cursor-pointer items-center gap-2 rounded-lg px-3 text-base text-muted hover:bg-hover">
+            <input type="checkbox" className="h-5 w-5 accent-action" checked={showNames} onChange={(e) => setShowNames(e.target.checked)} />
+            Mostra els noms
+          </label>
+          <button className="btn btn-ghost text-base" onClick={() => setRestart(true)}>
+            Torna a començar
+          </button>
+        </div>
+      </div>
+
+      {empty.length > 0 && (
+        <div className="warn-box">
+          <strong>No s'ha escrit res per a</strong> {empty.join(", ")}: no hi havia notes.
+        </div>
+      )}
+
+      {ordered.map((r) => (
+        <AreaReportCard
+          key={r.areaId}
+          area={areaById.get(r.areaId)!}
+          report={r}
+          display={display}
+          onChange={(changes) => updateArea(r.areaId, changes)}
+        />
+      ))}
+
+      <section className={`card p-5 ${allApproved ? "border-action" : ""}`}>
+        <h2 className="text-xl font-bold">Informe final</h2>
+        {allApproved ? (
+          <>
+            <p className="mb-3 text-muted">
+              Els codis s'han canviat pels noms aquí, al teu ordinador.
+            </p>
+            <div className="max-h-96 overflow-auto rounded-lg bg-paper p-4 leading-relaxed whitespace-pre-wrap">
+              {finalText}
+            </div>
+            <button className="btn btn-primary mt-4 px-6 text-lg" onClick={copy}>
+              Copia l'informe
+            </button>
+          </>
+        ) : (
+          <p className="mt-1 text-muted">
+            Aprova totes les àrees per poder copiar l'informe amb els noms ({approved} de{" "}
+            {ordered.length}).
+          </p>
+        )}
+      </section>
+
+      <ConfirmDialog
+        open={restart}
+        title="Tornar a començar l'informe?"
+        confirmLabel="Torna a començar"
+        danger
+        onCancel={() => setRestart(false)}
+        onConfirm={() => {
+          store.deleteReport(student.id, report.term);
+          setRestart(false);
+        }}
+      >
+        Es perdrà aquest informe, amb les teves edicions i aprovacions, i tornaràs a la vista prèvia
+        del que s'envia.
+      </ConfirmDialog>
+    </div>
+  );
+}
+
+function countSentences(text: string): number {
+  return text.split(/(?<=[.!?])\s+/).filter((s) => s.trim()).length;
+}
+
+function AreaReportCard({
+  area,
+  report,
+  display,
+  onChange,
+}: {
+  area: Area;
+  report: AreaReport;
+  display: (t: string) => string;
+  onChange: (changes: Partial<AreaReport>) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+
+  const flags = report.editedText === undefined ? report.sentences.filter((s) => s.flag) : [];
+  const count = countSentences(areaReportText(report));
+  const title = (
+    <div className="flex flex-wrap items-baseline justify-between gap-2">
+      <h3 className="text-xl font-bold">{area.name}</h3>
+      <span className="text-sm text-muted">
+        {report.approved ? (
+          <span className="font-bold text-ink">✓ Aprovada</span>
+        ) : flags.length ? (
+          <span className="font-bold text-warn-ink">
+            {plural(flags.length, "frase marcada", "frases marcades")}
+          </span>
+        ) : (
+          "Per aprovar"
+        )}
+      </span>
+    </div>
+  );
+
+  if (report.approved) {
+    return (
+      <section className="card p-5">
+        {title}
+        <p className="mt-2 leading-relaxed text-muted">{display(areaReportText(report))}</p>
+        <button className="btn btn-ghost mt-2 -ml-3 text-base" onClick={() => onChange({ approved: false })}>
+          Torna a obrir
+        </button>
+      </section>
+    );
+  }
+
+  return (
+    <section className="card p-5">
+      {title}
+
+      {editing ? (
+        <div className="mt-3 space-y-3">
+          <textarea
+            autoFocus
+            rows={8}
+            className="field resize-y leading-relaxed"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => e.key === "Escape" && setEditing(false)}
+          />
+          <p className="text-sm text-muted">
+            Escriu els alumnes amb el codi (p. ex. A-01); el nom es posarà en copiar l'informe.
+          </p>
+          <div className="flex gap-2">
+            <button
+              className="btn btn-primary"
+              onClick={() => {
+                onChange({ editedText: draft.trim() });
+                setEditing(false);
+              }}
+            >
+              Desa
+            </button>
+            <button className="btn btn-secondary" onClick={() => setEditing(false)}>
+              Cancel·la
+            </button>
+          </div>
+        </div>
+      ) : (
+        <>
+          <p className="mt-3 text-lg leading-relaxed">
+            {report.editedText !== undefined
+              ? display(report.editedText)
+              : report.sentences.map((s, i) => {
+                  const n = s.flag ? flags.indexOf(s) + 1 : 0;
+                  return (
+                    <Fragment key={i}>
+                      {i > 0 && " "}
+                      {s.flag ? (
+                        <span className="rounded bg-warn-bg decoration-warn-line decoration-2 underline-offset-4 [box-decoration-break:clone] underline px-0.5">
+                          {display(s.text)}
+                          <sup className="ml-0.5 font-bold text-warn-ink">{n}</sup>
+                        </span>
+                      ) : (
+                        display(s.text)
+                      )}
+                    </Fragment>
+                  );
+                })}
+          </p>
+
+          {report.editedText !== undefined && (
+            <p className="mt-2 text-sm text-muted">
+              Text editat per tu. (A la versió real, el revisor el tornarà a comprovar.)
+            </p>
+          )}
+
+          {flags.length > 0 && (
+            <ul className="mt-4 space-y-2">
+              {flags.map((s, i) => (
+                <li key={i} className="warn-box flex flex-wrap items-center gap-x-3 gap-y-1 py-2">
+                  <span className="flex-1">
+                    <strong>{i + 1}.</strong> {s.flag}
+                  </span>
+                  <span className="flex gap-1">
+                    <button
+                      className="btn min-h-9 border border-warn-line bg-white px-3 text-base font-normal text-ink hover:bg-hover"
+                      onClick={() => onChange({ sentences: report.sentences.filter((x) => x !== s) })}
+                    >
+                      Treu la frase
+                    </button>
+                    <button
+                      className="btn min-h-9 px-3 text-base font-normal text-warn-ink hover:bg-white/60"
+                      onClick={() =>
+                        onChange({
+                          sentences: report.sentences.map((x) => (x === s ? { text: x.text } : x)),
+                        })
+                      }
+                    >
+                      Mantén-la
+                    </button>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            <button className="btn btn-primary" onClick={() => onChange({ approved: true })}>
+              Aprova
+            </button>
+            <button
+              className="btn btn-secondary"
+              onClick={() => {
+                setDraft(areaReportText(report));
+                setEditing(true);
+              }}
+            >
+              Edita
+            </button>
+            <span className={`ml-auto text-sm ${count < 6 || count > 8 ? "font-bold text-warn-ink" : "text-muted"}`}>
+              {plural(count, "frase", "frases")}
+              {(count < 6 || count > 8) && " (objectiu: 6-8)"}
+            </span>
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
