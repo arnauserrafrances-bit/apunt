@@ -7,7 +7,8 @@ Apunt stores notes about children (students aged 6–12) written by their tutor.
 - Before any text is sent to the AI, the device replaces full names, name + surname and first names with the code (`lib/anonymize.ts`, 11 tests).
 - If a name is ambiguous (e.g. "Pau" = name or "peace"; two students with the same name), the app **asks the teacher instead of guessing**.
 - The teacher sees the exact anonymised text before it is sent. Names are put back only on her device, at the end.
-- No API key is in the frontend. The AI call will run in a server function that only receives anonymised text.
+- No API key is in the frontend. The AI runs in a Vercel server function (`frontend/api/report.ts`) that only receives anonymised text, needs an access code, limits the size of each request, and does not store or log the notes. The key lives only in Vercel's environment variables.
+- Names are put back on the device with the right Catalan article (`lib/articles.ts`); the AI only ever sees "la A-01" or "en A-01".
 
 ## 2. End-to-end encryption (built and tested)
 Only standard primitives from libsodium and WebCrypto; no home-made cryptography (`lib/crypto.ts`, 18 tests; `lib/backup.ts`, 5 tests).

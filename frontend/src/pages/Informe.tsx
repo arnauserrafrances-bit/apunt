@@ -7,10 +7,11 @@ import { useToast } from "../components/Toast";
 import { TERMS } from "../config";
 import { areaReportText, fakeAreaReport } from "../data/fakeReport";
 import { loadAccessCode, requestAiReport, saveAccessCode } from "../lib/aiReport";
+import { deanonymizeWithArticles, guessGenders } from "../lib/articles";
+import { buildLetter } from "../lib/letter";
 import {
   analyze,
   countNameLeaks,
-  deanonymize,
   pendingAsks,
   resolve,
   type Decision,
@@ -131,7 +132,7 @@ export function InformeAlumne() {
 // ------------------------------------------------------------------ Pas 2: què s'envia
 
 const INSTRUCTIONS =
-  "Escriu en català entre 6 i 8 frases per a cada àrea sobre l'alumne indicat. " +
+  "Escriu en català un paràgraf per a cada àrea sobre l'alumne indicat, amb l'estil d'un informe a la família. " +
   "Fes servir només la informació de les notes. No inventis res i no exageris.";
 
 interface NoteSegments {
@@ -489,11 +490,14 @@ function Review({ student, report }: { student: Student; report: Report }) {
       areas: report.areas.map((a) => (a.areaId === areaId ? { ...a, ...changes } : a)),
     });
 
-  const display = (t: string) => (showNames ? deanonymize(t, store.students) : t);
+  const paragraphs = ordered.map((r) => areaReportText(r));
+  const genders = guessGenders(paragraphs.join("\n"));
+  const display = (t: string) => (showNames ? deanonymizeWithArticles(t, store.students, genders) : t);
 
   const finalText = [
     `${fullName(student)} · ${TERMS[report.term]}`,
-    ...ordered.map((r) => `\n${areaById.get(r.areaId)?.name}\n${deanonymize(areaReportText(r), store.students)}`),
+    "",
+    buildLetter(student, report.term, paragraphs, store.students),
   ].join("\n");
 
   const copy = async () => {
