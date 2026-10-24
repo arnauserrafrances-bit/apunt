@@ -6,6 +6,7 @@ import { StudentSearch } from "../components/StudentSearch";
 import { useToast } from "../components/Toast";
 import { TERMS } from "../config";
 import { areaReportText, fakeAreaReport } from "../data/fakeReport";
+import { loadAccessCode, requestAiReport, saveAccessCode } from "../lib/aiReport";
 import {
   analyze,
   countNameLeaks,
@@ -143,6 +144,9 @@ function Preview({ student }: { student: Student }) {
   const { students, areas, notes, currentTerm } = store;
   const [decisions, setDecisions] = useState<Record<string, Decision>>({});
   const [phase, setPhase] = useState<"idle" | "writing" | "reviewing">("idle");
+  const [accessCode, setAccessCode] = useState(loadAccessCode);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const useAi = accessCode.trim().length > 0;
 
   const byArea = useMemo(() => {
     const list: { area: Area; items: NoteSegments[] }[] = [];
@@ -181,7 +185,39 @@ function Preview({ student }: { student: Student }) {
     Object.values(decisions).filter((d) => d !== "word").length;
   const markedWords = Object.values(decisions).filter((d) => d === "word").length;
 
-  const generate = () => {
+  const generate = () => (useAi ? generateWithAi() : generateSimulated());
+
+  const generateWithAi = async () => {
+    setAiError(null);
+    setPhase("writing");
+    saveAccessCode(accessCode.trim());
+    try {
+      const aiAreas = await requestAiReport(
+        accessCode.trim(),
+        student.code,
+        TERMS[currentTerm],
+        withNotes.map(({ area, items }) => ({
+          areaId: area.id,
+          areaName: area.name,
+          notes: items.map(({ note, segments }) => ({
+            date: formatDate(note.date),
+            text: resolve(segments, decisions, students),
+          })),
+        })),
+      );
+      store.saveReport({
+        studentId: student.id,
+        term: currentTerm,
+        emptyAreaIds: empty.map((a) => a.id),
+        areas: aiAreas,
+      });
+    } catch (e) {
+      setAiError(e instanceof Error ? e.message : "Error desconegut.");
+      setPhase("idle");
+    }
+  };
+
+  const generateSimulated = () => {
     setPhase("writing");
     window.setTimeout(() => setPhase("reviewing"), 1200);
     window.setTimeout(() => {
@@ -219,8 +255,12 @@ function Preview({ student }: { student: Student }) {
     return (
       <div className="card flex items-center gap-4 p-6 text-lg">
         <span className="h-5 w-5 animate-spin rounded-full border-2 border-line border-t-action" />
-        {phase === "writing" ? "Redactant l'informe…" : "Revisant cada frase amb les notes…"}
-        <span className="text-sm text-muted">(simulat)</span>
+        {useAi
+          ? "La IA està redactant i revisant l'informe… (uns 20-40 segons)"
+          : phase === "writing"
+            ? "Redactant l'informe…"
+            : "Revisant cada frase amb les notes…"}
+        {!useAi && <span className="text-sm text-muted">(simulat)</span>}
       </div>
     );
   }
@@ -294,9 +334,35 @@ function Preview({ student }: { student: Student }) {
         </Check>
       </section>
 
+      <section className="card space-y-2 p-5">
+        <label className="block font-bold" htmlFor="access-code">
+          Codi d'accés a la IA
+        </label>
+        <input
+          id="access-code"
+          type="password"
+          autoComplete="off"
+          className="field max-w-xs"
+          placeholder="Sense codi: informe simulat"
+          value={accessCode}
+          onChange={(e) => setAccessCode(e.target.value)}
+        />
+        <p className="text-sm text-muted">
+          {useAi
+            ? "S'enviarà el text de dalt (només amb codis) a la IA real."
+            : "Sense codi, l'informe és simulat i no s'envia res enlloc."}
+        </p>
+      </section>
+
+      {aiError && (
+        <div className="warn-box" role="alert">
+          <strong>No s'ha pogut generar l'informe:</strong> {aiError}
+        </div>
+      )}
+
       <div className="flex flex-wrap items-center gap-4">
         <button className="btn btn-primary px-6 text-lg" disabled={pending > 0 || leaks > 0} onClick={generate}>
-          Confirma i genera l'informe
+          {useAi ? "Confirma i genera l'informe amb IA" : "Genera un informe simulat"}
         </button>
         {pending > 0 && <span className="text-warn-ink">Primer decideix les paraules de dalt.</span>}
       </div>
