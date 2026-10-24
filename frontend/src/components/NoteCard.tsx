@@ -42,7 +42,7 @@ export function NoteCard({ note, areas, onSave, onDelete }: Props) {
             <select
               className="field mt-1 text-base text-ink"
               value={draft.areaId}
-              onChange={(e) => setDraft({ ...draft, areaId: Number(e.target.value) })}
+              onChange={(e) => setDraft({ ...draft, areaId: e.target.value })}
             >
               {areas.map((a) => (
                 <option key={a.id} value={a.id}>

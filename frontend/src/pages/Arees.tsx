@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { PageTitle } from "../components/Layout";
+import { DEFAULT_AREAS } from "../config";
 import { useToast } from "../components/Toast";
 import { plural } from "../lib/text";
 import { useStore } from "../store/AppStore";
-import type { Area } from "../types";
+import type { Area, Id } from "../types";
 
 function AreaRow({
   area,
@@ -113,13 +114,13 @@ export default function Arees() {
   const toast = useToast();
   const [newName, setNewName] = useState("");
   const [addError, setAddError] = useState<string | null>(null);
-  const [from, setFrom] = useState<number | "">("");
-  const [to, setTo] = useState<number | "">("");
+  const [from, setFrom] = useState<Id | "">("");
+  const [to, setTo] = useState<Id | "">("");
 
-  const counts = new Map<number, number>();
+  const counts = new Map<Id, number>();
   for (const n of notes) counts.set(n.areaId, (counts.get(n.areaId) ?? 0) + 1);
   const fromCount = from ? (counts.get(from) ?? 0) : 0;
-  const nameOf = (id: number | "") => areas.find((a) => a.id === id)?.name ?? "";
+  const nameOf = (id: Id | "") => areas.find((a) => a.id === id)?.name ?? "";
 
   return (
     <div className="mx-auto max-w-3xl space-y-10">
@@ -128,17 +129,33 @@ export default function Arees() {
           title="Àrees"
           subtitle="L'ordre d'aquesta llista és el dels botons de Nota ràpida i el de l'informe."
         />
-        <ul className="divide-y divide-line rounded-xl border border-line bg-card">
-          {areas.map((a, i) => (
-            <AreaRow
-              key={a.id}
-              area={a}
-              count={counts.get(a.id) ?? 0}
-              first={i === 0}
-              last={i === areas.length - 1}
-            />
-          ))}
-        </ul>
+        {areas.length ? (
+          <ul className="divide-y divide-line rounded-xl border border-line bg-card">
+            {areas.map((a, i) => (
+              <AreaRow
+                key={a.id}
+                area={a}
+                count={counts.get(a.id) ?? 0}
+                first={i === 0}
+                last={i === areas.length - 1}
+              />
+            ))}
+          </ul>
+        ) : (
+          <div className="space-y-3 rounded-xl border border-line bg-card p-5">
+            <p>Encara no hi ha cap àrea.</p>
+            <button
+              className="btn btn-primary"
+              onClick={() => {
+                store.addDefaultAreas();
+                toast({ message: "S'han afegit les àrees habituals de primària." });
+              }}
+            >
+              Afegeix les àrees habituals de primària
+            </button>
+            <p className="text-sm text-muted">{DEFAULT_AREAS.join(" · ")}</p>
+          </div>
+        )}
       </div>
 
       <section>
@@ -177,7 +194,7 @@ export default function Arees() {
             <select
               className="field mt-1 text-base text-ink"
               value={from}
-              onChange={(e) => setFrom(Number(e.target.value) || "")}
+              onChange={(e) => setFrom(e.target.value)}
             >
               <option value="">Tria l'àrea…</option>
               {areas.map((a) => (
@@ -193,7 +210,7 @@ export default function Arees() {
             <select
               className="field mt-1 text-base text-ink"
               value={to}
-              onChange={(e) => setTo(Number(e.target.value) || "")}
+              onChange={(e) => setTo(e.target.value)}
             >
               <option value="">Tria l'àrea…</option>
               {areas
@@ -210,7 +227,7 @@ export default function Arees() {
           className="btn btn-primary mt-3"
           disabled={!from || !to || from === to || fromCount === 0}
           onClick={() => {
-            const moved = store.moveAreaNotes(from as number, to as number);
+            const moved = store.moveAreaNotes(from as Id, to as Id);
             toast({ message: `S'han mogut ${plural(moved, "nota", "notes")} a «${nameOf(to)}».` });
             setFrom("");
             setTo("");

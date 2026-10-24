@@ -2,7 +2,7 @@
 // i Haiku (revisió). Les frases surten de les notes ja anonimitzades, i s'hi
 // afegeixen 1 o 2 frases genèriques que el "revisor" marca sempre. Si hi ha poques
 // notes, l'àrea queda per sota de 6 frases: és el que passarà de veritat.
-import type { AreaReport, ReportSentence } from "../types";
+import type { AreaReport, Id, ReportSentence } from "../types";
 
 const FILLERS: [string, string][] = [
   ["{c} mostra un gran interès per l'àrea i participa sempre amb entusiasme.", "No surt de les notes."],
@@ -24,8 +24,10 @@ function splitSentences(text: string): string[] {
 }
 
 /** notesText: textos de les notes d'una àrea, ja amb codis en lloc de noms. */
+/** areaIndex i seed només serveixen per variar quines frases es marquen. */
 export function fakeAreaReport(
-  areaId: number,
+  areaId: Id,
+  areaIndex: number,
   code: string,
   notesText: string[],
   seed: number,
@@ -34,9 +36,9 @@ export function fakeAreaReport(
   const sentences: ReportSentence[] = fromNotes.slice(0, 7).map((text) => ({ text }));
 
   // 1 o 2 frases marcades, sense passar de 8.
-  const extra = Math.min(1 + ((seed + areaId) % 2), 8 - sentences.length);
+  const extra = Math.min(1 + ((seed + areaIndex) % 2), 8 - sentences.length);
   for (let i = 0; i < extra; i++) {
-    const [text, flag] = FILLERS[(seed + areaId * 3 + i) % FILLERS.length];
+    const [text, flag] = FILLERS[(seed + areaIndex * 3 + i) % FILLERS.length];
     const at = 1 + ((seed + i) % sentences.length || 0);
     sentences.splice(Math.min(at, sentences.length), 0, { text: text.replace("{c}", code), flag });
   }

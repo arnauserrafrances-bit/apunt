@@ -1,21 +1,24 @@
 export type Term = 1 | 2 | 3;
 
+/** UUID: dos dispositius no poden generar el mateix. */
+export type Id = string;
+
 export interface Student {
-  id: number;
+  id: Id;
   code: string;
   firstName: string;
   lastName: string;
 }
 
 export interface Area {
-  id: number;
+  id: Id;
   name: string;
 }
 
 export interface Note {
-  id: number;
-  studentId: number;
-  areaId: number;
+  id: Id;
+  studentId: Id;
+  areaId: Id;
   text: string;
   date: string; // AAAA-MM-DD
   term: Term;
@@ -28,15 +31,15 @@ export interface ReportSentence {
 }
 
 export interface AreaReport {
-  areaId: number;
+  areaId: Id;
   sentences: ReportSentence[];
   editedText?: string; // si la tutora l'ha editat
   approved: boolean;
 }
 
 export interface Report {
-  studentId: number;
+  studentId: Id;
   term: Term;
   areas: AreaReport[];
-  emptyAreaIds: number[];
+  emptyAreaIds: Id[];
 }

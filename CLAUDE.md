@@ -59,6 +59,8 @@ IA (després de la fase 7): control de noms abans d'enviar → informe amb Sonne
   - Dos alumnes amb el mateix nom: es pregunta quin és.
   - Mai s'endevina: si hi ha dubte, es pregunta. Es manté l'article ("la A-02") perquè la IA sàpiga el gènere.
 - **Informe:** en tornar a posar els noms es fa servir el nom de pila.
+- **Compte nou:** comença buit. Les dades de prova només es carreguen si la tutora ho demana («Carrega dades de prova», amb confirmació; si ja hi ha dades, les substitueix). A Àrees, si no n'hi ha cap, es proposen les 7 àrees habituals de primària (`DEFAULT_AREAS`).
+- **Ids:** UUID v4 generats amb `newId()` (`lib/id.ts`), no amb `crypto.randomUUID()`, que falla fora d'HTTPS (p. ex. provant des del mòbil amb la IP local).
 - **Sal d'Argon2id:** es deriva de l'email (BLAKE2b). Per això **el canvi d'email està bloquejat** al MVP.
 - **«Recorda aquest dispositiu»:** casella opcional, desmarcada per defecte. Si es marca, `dataKey` es guarda a IndexedDB embolicada amb una clau WebCrypto no exportable; «Surt» l'esborra.
 - **Còpia (.apunt):** inclou el clauer embolicat i els registres xifrats; s'obre només amb la contrasenya o amb el codi de recuperació, encara que es perdin les dades de Supabase.

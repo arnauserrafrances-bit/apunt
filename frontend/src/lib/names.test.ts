@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Student } from "../types";
 import { formatCode, matchesStudent, parseNameLine, parseNameList } from "./names";
 
-const maria: Student = { id: 1, code: "A-07", firstName: "Maria", lastName: "Puig Soler" };
+const maria: Student = { id: "s1", code: "A-07", firstName: "Maria", lastName: "Puig Soler" };
 
 describe("noms", () => {
   it("llegeix «Nom Cognoms» i «Cognoms, Nom»", () => {

@@ -21,29 +21,31 @@ const MOBILE_NAV = [
   { to: "/mes", label: "Més", match: ["/mes", "/alumnes", "/arees"] },
 ];
 
-export function ResetDataButton() {
-  const { resetData } = useStore();
+/** Carrega la classe inventada. Només si la tutora ho demana; si ja hi ha dades, les substitueix. */
+export function LoadFakeDataButton() {
+  const { loadFakeData, isEmpty } = useStore();
   const toast = useToast();
   const [open, setOpen] = useState(false);
   return (
     <>
       <button className="text-sm text-muted underline underline-offset-4 hover:text-ink" onClick={() => setOpen(true)}>
-        Reinicia les dades de prova
+        Carrega dades de prova
       </button>
       <ConfirmDialog
         open={open}
-        title="Reiniciar les dades de prova?"
-        confirmLabel="Reinicia"
-        danger
+        title="Carregar les dades de prova?"
+        confirmLabel={isEmpty ? "Carrega" : "Substitueix-ho tot"}
+        danger={!isEmpty}
         onCancel={() => setOpen(false)}
         onConfirm={() => {
-          resetData();
+          loadFakeData();
           setOpen(false);
-          toast({ message: "S'han restaurat les dades de prova." });
+          toast({ message: "S'han carregat les dades de prova." });
         }}
       >
-        Es perdran tots els canvis que hagis fet (alumnes, àrees, notes i informes) i es tornarà a
-        la classe inventada inicial.
+        {isEmpty
+          ? "Es carregarà una classe inventada de 5è (25 alumnes, 7 àrees i unes 60 notes) per provar l'aplicació."
+          : "Ja tens dades. Si continues, s'esborraran tots els alumnes, àrees, notes i informes actuals i se substituiran per una classe inventada."}
       </ConfirmDialog>
     </>
   );
@@ -70,7 +72,7 @@ export function Layout({ children }: { children: ReactNode }) {
           ))}
         </nav>
         <div className="mt-auto">
-          <ResetDataButton />
+          <LoadFakeDataButton />
         </div>
       </aside>
 

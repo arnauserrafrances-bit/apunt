@@ -1,5 +1,5 @@
-// Estat del prototip. Es guarda al navegador (localStorage) i es pot reiniciar
-// amb les dades de prova. Les regles són les mateixes que core/db.py.
+// Estat de l'aplicació. Les pantalles només parlen amb aquest store; on es guarden les dades
+// ho decideix el Repository (ara localStorage; a la fase 4, IndexedDB xifrat + Supabase).
 import {
   createContext,
   useContext,
@@ -9,72 +9,50 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { STORAGE_KEY } from "../config";
-import { createFakeData, type AppData } from "../data/fakeData";
+import { DEFAULT_AREAS } from "../config";
+import { createFakeData } from "../data/fakeData";
+import { newId } from "../lib/id";
 import { formatCode, nameKey, parseNameList, type BulkParseResult } from "../lib/names";
 import { clean, plural } from "../lib/text";
-import type { Note, Report, Student, Term } from "../types";
+import type { Id, Note, Report, Student, Term } from "../types";
+import { emptyState, type AppState, type Repository } from "./repository";
 
-interface PersistedState extends AppData {
-  currentTerm: Term;
-  reports: Record<string, Report>; // clau: `${studentId}-${term}`
-}
+export const reportKey = (studentId: Id, term: Term) => `${studentId}-${term}`;
 
-function initialState(): PersistedState {
-  return { ...createFakeData(), currentTerm: 1, reports: {} };
-}
+function useStoreValue(repository: Repository, initial: AppState) {
+  const [state, setState] = useState<AppState>(initial);
 
-function load(): PersistedState {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return JSON.parse(raw) as PersistedState;
-  } catch {
-    // Dades malmeses o navegador sense accés: tornem a les de prova.
-  }
-  return initialState();
-}
-
-export const reportKey = (studentId: number, term: Term) => `${studentId}-${term}`;
-
-function useStoreValue() {
-  const [state, setState] = useState<PersistedState>(load);
-
+  // No desem l'estat inicial (acabat de carregar); només els canvis.
+  const loaded = useRef(true);
   useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    } catch {
-      // Si no es pot desar, el prototip continua funcionant en memòria.
+    if (loaded.current) {
+      loaded.current = false;
+      return;
     }
-  }, [state]);
-
-  // Comptador d'ids fora de l'estat, perquè dues accions seguides no en reutilitzin cap.
-  const idRef = useRef(state.nextId);
-  const nextId = () => idRef.current++;
+    void repository.save(state);
+  }, [repository, state]);
 
   return useMemo(() => {
-    const update = (fn: (s: PersistedState) => Partial<PersistedState>) =>
-      setState((s) => ({ ...s, ...fn(s), nextId: idRef.current }));
+    const update = (fn: (s: AppState) => Partial<AppState>) => setState((s) => ({ ...s, ...fn(s) }));
 
     return {
       ...state,
+      isEmpty: !state.students.length && !state.areas.length && !state.notes.length,
 
       setTerm: (term: Term) => update(() => ({ currentTerm: term })),
 
-      resetData: () => {
-        const fresh = initialState();
-        idRef.current = fresh.nextId;
-        setState(fresh);
-      },
+      /** Substitueix totes les dades per la classe inventada. Només si la tutora ho demana. */
+      loadFakeData: () => setState(createFakeData()),
 
       // ------------------------------------------------ Notes
       addNote: (n: Omit<Note, "id" | "createdAt">): Note => {
-        const note: Note = { ...n, text: n.text.trim(), id: nextId(), createdAt: Date.now() };
+        const note: Note = { ...n, text: n.text.trim(), id: newId(), createdAt: Date.now() };
         update((s) => ({ notes: [...s.notes, note] }));
         return note;
       },
-      updateNote: (id: number, changes: Partial<Omit<Note, "id">>) =>
+      updateNote: (id: Id, changes: Partial<Omit<Note, "id">>) =>
         update((s) => ({ notes: s.notes.map((n) => (n.id === id ? { ...n, ...changes } : n)) })),
-      deleteNote: (id: number) => update((s) => ({ notes: s.notes.filter((n) => n.id !== id) })),
+      deleteNote: (id: Id) => update((s) => ({ notes: s.notes.filter((n) => n.id !== id) })),
       restoreNote: (note: Note) => update((s) => ({ notes: [...s.notes, note] })),
 
       // ------------------------------------------------ Alumnes
@@ -82,7 +60,7 @@ function useStoreValue() {
         const parsed = parseNameList(text, state.students);
         let number = state.nextStudentNumber;
         const added = parsed.valid.map(([firstName, lastName]) => ({
-          id: nextId(),
+          id: newId(),
           code: formatCode(number++),
           firstName,
           lastName,
@@ -98,7 +76,7 @@ function useStoreValue() {
           return `Ja hi ha un alumne anomenat «${first} ${last}» a la classe.`;
         }
         const student = {
-          id: nextId(),
+          id: newId(),
           code: formatCode(state.nextStudentNumber),
           firstName: first,
           lastName: last,
@@ -109,7 +87,7 @@ function useStoreValue() {
         }));
         return student;
       },
-      deleteStudent: (id: number) =>
+      deleteStudent: (id: Id) =>
         update((s) => ({
           students: s.students.filter((st) => st.id !== id),
           notes: s.notes.filter((n) => n.studentId !== id),
@@ -125,11 +103,11 @@ function useStoreValue() {
         if (state.areas.some((a) => a.name.toLowerCase() === n.toLowerCase())) {
           return `Ja existeix l'àrea «${n}».`;
         }
-        const area = { id: nextId(), name: n };
+        const area = { id: newId(), name: n };
         update((s) => ({ areas: [...s.areas, area] }));
         return null;
       },
-      renameArea: (id: number, name: string): string | null => {
+      renameArea: (id: Id, name: string): string | null => {
         const n = clean(name);
         if (!n) return "El nom de l'àrea no pot estar buit.";
         if (state.areas.some((a) => a.id !== id && a.name.toLowerCase() === n.toLowerCase())) {
@@ -138,7 +116,7 @@ function useStoreValue() {
         update((s) => ({ areas: s.areas.map((a) => (a.id === id ? { ...a, name: n } : a)) }));
         return null;
       },
-      deleteArea: (id: number): string | null => {
+      deleteArea: (id: Id): string | null => {
         const count = state.notes.filter((n) => n.areaId === id).length;
         if (count) {
           return (
@@ -149,7 +127,16 @@ function useStoreValue() {
         update((s) => ({ areas: s.areas.filter((a) => a.id !== id) }));
         return null;
       },
-      moveArea: (id: number, direction: -1 | 1) =>
+      addDefaultAreas: () =>
+        update((s) => ({
+          areas: [
+            ...s.areas,
+            ...DEFAULT_AREAS.filter((n) => !s.areas.some((a) => a.name.toLowerCase() === n.toLowerCase())).map(
+              (name) => ({ id: newId(), name }),
+            ),
+          ],
+        })),
+      moveArea: (id: Id, direction: -1 | 1) =>
         update((s) => {
           const areas = [...s.areas];
           const i = areas.findIndex((a) => a.id === id);
@@ -158,7 +145,7 @@ function useStoreValue() {
           [areas[i], areas[j]] = [areas[j], areas[i]];
           return { areas };
         }),
-      moveAreaNotes: (fromId: number, toId: number): number => {
+      moveAreaNotes: (fromId: Id, toId: Id): number => {
         const count = state.notes.filter((n) => n.areaId === fromId).length;
         update((s) => ({
           notes: s.notes.map((n) => (n.areaId === fromId ? { ...n, areaId: toId } : n)),
@@ -171,7 +158,7 @@ function useStoreValue() {
         update((s) => ({
           reports: { ...s.reports, [reportKey(report.studentId, report.term)]: report },
         })),
-      deleteReport: (studentId: number, term: Term) =>
+      deleteReport: (studentId: Id, term: Term) =>
         update((s) => {
           const reports = { ...s.reports };
           delete reports[reportKey(studentId, term)];
@@ -185,9 +172,27 @@ export type Store = ReturnType<typeof useStoreValue>;
 
 const StoreContext = createContext<Store | null>(null);
 
-export function StoreProvider({ children }: { children: ReactNode }) {
-  const store = useStoreValue();
+function LoadedStore({ repository, initial, children }: { repository: Repository; initial: AppState; children: ReactNode }) {
+  const store = useStoreValue(repository, initial);
   return <StoreContext.Provider value={store}>{children}</StoreContext.Provider>;
+}
+
+/** Carrega les dades del repositori i, mentrestant, no mostra res. Si no n'hi ha, comença buit. */
+export function StoreProvider({ repository, children }: { repository: Repository; children: ReactNode }) {
+  const [initial, setInitial] = useState<AppState | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    repository.load().then((s) => !cancelled && setInitial(s ?? emptyState()));
+    return () => {
+      cancelled = true;
+    };
+  }, [repository]);
+  if (!initial) return null;
+  return (
+    <LoadedStore repository={repository} initial={initial}>
+      {children}
+    </LoadedStore>
+  );
 }
 
 export function useStore(): Store {

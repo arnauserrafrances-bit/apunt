@@ -1,5 +1,5 @@
 import { Link } from "react-router";
-import { PageTitle, ResetDataButton } from "../components/Layout";
+import { LoadFakeDataButton, PageTitle } from "../components/Layout";
 
 /** Menú "Més" del mòbil: pantalles que es fan servir poc. */
 export default function Mes() {
@@ -21,7 +21,7 @@ export default function Mes() {
         </li>
       </ul>
       <div className="mt-10">
-        <ResetDataButton />
+        <LoadFakeDataButton />
       </div>
     </div>
   );

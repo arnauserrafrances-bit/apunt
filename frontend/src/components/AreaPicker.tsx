@@ -1,11 +1,11 @@
 import { forwardRef } from "react";
 import { shortAreaName } from "../lib/areas";
-import type { Area } from "../types";
+import type { Area, Id } from "../types";
 
 interface Props {
   areas: Area[];
-  value: number | null;
-  onChange: (areaId: number) => void;
+  value: Id | null;
+  onChange: (areaId: Id) => void;
   onEscape?: () => void;
 }
 

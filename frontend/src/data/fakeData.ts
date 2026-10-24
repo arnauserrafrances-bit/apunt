@@ -3,15 +3,10 @@
 //  - Alumnes amb noms que també són paraules: Pau, Mar, Clara, Neus, Rosa, Estel, Ona, Pol, Abril.
 //  - Dues alumnes que es diuen Laia.
 //  - Notes que esmenten companys ("ha ajudat en Pau") i paraules normals ("hi ha pau").
+import { DEFAULT_AREAS } from "../config";
+import { newId } from "../lib/id";
+import type { AppState } from "../store/repository";
 import type { Area, Note, Student, Term } from "../types";
-
-export interface AppData {
-  students: Student[];
-  areas: Area[];
-  notes: Note[];
-  nextStudentNumber: number;
-  nextId: number;
-}
 
 const STUDENTS: [string, string][] = [
   ["Pau", "Serra Vidal"],
@@ -41,15 +36,7 @@ const STUDENTS: [string, string][] = [
   ["Aina", "Cortés Badia"],
 ];
 
-const AREAS = [
-  "Llengua catalana i literatura",
-  "Llengua castellana i literatura",
-  "Llengua estrangera (anglès)",
-  "Matemàtiques",
-  "Coneixement del medi natural, social i cultural",
-  "Educació artística",
-  "Educació física",
-];
+const AREAS = DEFAULT_AREAS;
 
 // [alumne (núm.), àrea (núm.), dia de setembre, text]
 const CAT = 1, CAST = 2, ANG = 3, MAT = 4, MEDI = 5, ART = 6, EF = 7;
@@ -139,20 +126,21 @@ const NOTES: [number, number, number, string][] = [
   [25, MAT, 24, "Entén bé el valor posicional fins als milions."],
 ];
 
-export function createFakeData(): AppData {
+/** Només es carreguen si la tutora ho demana. */
+export function createFakeData(): AppState {
   const students: Student[] = STUDENTS.map(([firstName, lastName], i) => ({
-    id: i + 1,
+    id: newId(),
     code: `A-${String(i + 1).padStart(2, "0")}`,
     firstName,
     lastName,
   }));
-  const areas: Area[] = AREAS.map((name, i) => ({ id: i + 1, name }));
-  const notes: Note[] = NOTES.map(([studentId, areaId, day, text], i) => {
+  const areas: Area[] = AREAS.map((name) => ({ id: newId(), name }));
+  const notes: Note[] = NOTES.map(([student, area, day, text], i) => {
     const date = `2026-09-${String(day).padStart(2, "0")}`;
     return {
-      id: i + 1,
-      studentId,
-      areaId,
+      id: newId(),
+      studentId: students[student - 1].id,
+      areaId: areas[area - 1].id,
       text,
       date,
       term: 1 as Term,
@@ -163,7 +151,8 @@ export function createFakeData(): AppData {
     students,
     areas,
     notes,
+    reports: {},
+    currentTerm: 1,
     nextStudentNumber: students.length + 1,
-    nextId: 1000,
   };
 }

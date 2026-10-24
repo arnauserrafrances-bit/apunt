@@ -4,15 +4,18 @@ import { BrowserRouter } from "react-router";
 import App from "./App";
 import { APP_NAME } from "./config";
 import { StoreProvider } from "./store/AppStore";
+import { LocalStorageRepository } from "./store/repository";
 import { ToastProvider } from "./components/Toast";
 import "./index.css";
 
 document.title = APP_NAME;
 
+const repository = new LocalStorageRepository();
+
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <BrowserRouter>
-      <StoreProvider>
+      <StoreProvider repository={repository}>
         <ToastProvider>
           <App />
         </ToastProvider>

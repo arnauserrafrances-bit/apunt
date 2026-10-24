@@ -10,15 +10,15 @@ import {
 } from "./anonymize";
 
 const students: Student[] = [
-  { id: 1, code: "A-01", firstName: "Pau", lastName: "Serra Vidal" },
-  { id: 2, code: "A-02", firstName: "Mar", lastName: "Puig Ferrer" },
-  { id: 3, code: "A-03", firstName: "Laia", lastName: "Font Roca" },
-  { id: 4, code: "A-04", firstName: "Laia", lastName: "Serrano Prat" },
-  { id: 5, code: "A-05", firstName: "Martina", lastName: "Sánchez Rovira" },
-  { id: 6, code: "A-06", firstName: "Estel", lastName: "Grau Pons" },
-  { id: 7, code: "A-07", firstName: "Clara", lastName: "Rius Moreno" },
-  { id: 8, code: "A-08", firstName: "Neus", lastName: "Camps Oliver" },
-  { id: 9, code: "A-09", firstName: "Rosa", lastName: "Navarro Bassols" },
+  { id: "s1", code: "A-01", firstName: "Pau", lastName: "Serra Vidal" },
+  { id: "s2", code: "A-02", firstName: "Mar", lastName: "Puig Ferrer" },
+  { id: "s3", code: "A-03", firstName: "Laia", lastName: "Font Roca" },
+  { id: "s4", code: "A-04", firstName: "Laia", lastName: "Serrano Prat" },
+  { id: "s5", code: "A-05", firstName: "Martina", lastName: "Sánchez Rovira" },
+  { id: "s6", code: "A-06", firstName: "Estel", lastName: "Grau Pons" },
+  { id: "s7", code: "A-07", firstName: "Clara", lastName: "Rius Moreno" },
+  { id: "s8", code: "A-08", firstName: "Neus", lastName: "Camps Oliver" },
+  { id: "s9", code: "A-09", firstName: "Rosa", lastName: "Navarro Bassols" },
 ];
 
 const kinds = (segs: Segment[]) => segs.filter((s) => s.kind !== "text").map((s) => s.kind);
@@ -75,9 +75,9 @@ describe("noms que també són paraules", () => {
     const segs = analyze(text, students, "n1:");
     const [ask] = pendingAsks(segs, {});
     expect(ask.original).toBe("Pau");
-    expect(resolve(segs, { [ask.id]: 1 }, students)).toBe("A-01 ha dit que a la classe hi ha pau.");
+    expect(resolve(segs, { [ask.id]: "s1" }, students)).toBe("A-01 ha dit que a la classe hi ha pau.");
     expect(resolve(segs, { [ask.id]: "word" }, students)).toBe(text);
-    expect(pendingAsks(segs, { [ask.id]: 1 })).toEqual([]);
+    expect(pendingAsks(segs, { [ask.id]: "s1" })).toEqual([]);
   });
 });
 
@@ -89,7 +89,7 @@ describe("altres casos", () => {
   it("pregunta quan dos alumnes es diuen igual, i no deixa marcar-ho com a paraula", () => {
     const segs = analyze("La Laia ha fet de portaveu.", students);
     const ask = segs.find((s) => s.kind === "ask");
-    expect(ask).toMatchObject({ kind: "ask", candidates: [3, 4], allowWord: false });
+    expect(ask).toMatchObject({ kind: "ask", candidates: ["s3", "s4"], allowWord: false });
   });
 
   it("amb el cognom distingeix els dos alumnes que es diuen igual", () => {

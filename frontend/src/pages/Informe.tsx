@@ -18,7 +18,7 @@ import {
 import { fullName } from "../lib/names";
 import { formatDate, plural } from "../lib/text";
 import { reportKey, useStore } from "../store/AppStore";
-import type { Area, AreaReport, Note, Report, Student } from "../types";
+import type { Area, AreaReport, Id, Note, Report, Student } from "../types";
 
 // ------------------------------------------------------------------ Llista
 
@@ -192,9 +192,10 @@ function Preview({ student }: { student: Student }) {
         areas: withNotes.map(({ area, items }) =>
           fakeAreaReport(
             area.id,
+            areas.indexOf(area) + 1,
             student.code,
             items.map((i) => resolve(i.segments, decisions, students)),
-            student.id,
+            students.indexOf(student) + 1,
           ),
         ),
       };
@@ -416,7 +417,7 @@ function Review({ student, report }: { student: Student; report: Report }) {
   const allApproved = approved === ordered.length;
   const empty = report.emptyAreaIds.map((id) => areaById.get(id)?.name).filter(Boolean);
 
-  const updateArea = (areaId: number, changes: Partial<AreaReport>) =>
+  const updateArea = (areaId: Id, changes: Partial<AreaReport>) =>
     store.saveReport({
       ...report,
       areas: report.areas.map((a) => (a.areaId === areaId ? { ...a, ...changes } : a)),

@@ -7,7 +7,7 @@
 //
 // No endevinem mai: si hi ha dubte, es pregunta.
 import { STUDENT_CODE_PREFIX } from "../config";
-import type { Student } from "../types";
+import type { Id, Student } from "../types";
 import { fold } from "./text";
 
 /** Noms que també són paraules normals en català. */
@@ -21,23 +21,23 @@ export const COMMON_WORD_NAMES = new Set(
 
 export type Segment =
   | { kind: "text"; text: string }
-  | { kind: "name"; original: string; studentId: number; code: string }
+  | { kind: "name"; original: string; studentId: Id; code: string }
   | {
       kind: "ask";
       id: string;
       original: string;
-      candidates: number[];
+      candidates: Id[];
       reason: string;
       allowWord: boolean; // es pot marcar com a "paraula normal"
     };
 
 /** Decisió de la tutora per a un "ask": l'id de l'alumne, o "word" si és una paraula. */
-export type Decision = number | "word";
+export type Decision = Id | "word";
 
 interface Match {
   start: number;
   end: number;
-  studentId: number;
+  studentId: Id;
   firstNameOnly: boolean;
 }
 

@@ -6,7 +6,7 @@ import { useToast } from "../components/Toast";
 import { formatCode, fullName } from "../lib/names";
 import { plural } from "../lib/text";
 import { useStore } from "../store/AppStore";
-import type { Student } from "../types";
+import type { Id, Student } from "../types";
 
 interface BulkResult {
   added: Student[];
@@ -26,7 +26,7 @@ export default function Alumnes() {
   const [oneError, setOneError] = useState<string | null>(null);
   const [toDelete, setToDelete] = useState<Student | null>(null);
 
-  const noteCount = (id: number) => notes.filter((n) => n.studentId === id).length;
+  const noteCount = (id: Id) => notes.filter((n) => n.studentId === id).length;
   const deleteCount = toDelete ? noteCount(toDelete.id) : 0;
 
   return (

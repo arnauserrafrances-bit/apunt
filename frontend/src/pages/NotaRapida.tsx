@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import { AreaPicker } from "../components/AreaPicker";
-import { PageTitle } from "../components/Layout";
+import { LoadFakeDataButton, PageTitle } from "../components/Layout";
 import { StudentSearch } from "../components/StudentSearch";
 import { useToast } from "../components/Toast";
 import { TERMS } from "../config";
@@ -9,14 +9,15 @@ import { shortAreaName } from "../lib/areas";
 import { fullName } from "../lib/names";
 import { formatDate, todayIso } from "../lib/text";
 import { useStore } from "../store/AppStore";
+import type { Id } from "../types";
 
 type Focus = "student" | "area" | "text" | null;
 
 const LAST_AREA_KEY = "apunt-darrera-area";
 
-function readLastArea(): number | null {
+function readLastArea(): Id | null {
   try {
-    return Number(sessionStorage.getItem(LAST_AREA_KEY)) || null;
+    return sessionStorage.getItem(LAST_AREA_KEY);
   } catch {
     return null;
   }
@@ -28,11 +29,11 @@ export default function NotaRapida() {
   const toast = useToast();
   const [params, setParams] = useSearchParams();
 
-  const [studentId, setStudentId] = useState<number | null>(
+  const [studentId, setStudentId] = useState<Id | null>(
     () => students.find((s) => s.code === params.get("alumne"))?.id ?? null,
   );
-  const [areaId, setAreaId] = useState<number | null>(() => {
-    const fromUrl = Number(params.get("area"));
+  const [areaId, setAreaId] = useState<Id | null>(() => {
+    const fromUrl = params.get("area");
     const candidate = fromUrl || readLastArea();
     return areas.some((a) => a.id === candidate) ? candidate : null;
   });
@@ -133,17 +134,34 @@ export default function NotaRapida() {
   const byStudent = new Map(students.map((s) => [s.id, s]));
   const byArea = new Map(areas.map((a) => [a.id, a]));
 
-  if (!students.length) {
+  if (!students.length || !areas.length) {
     return (
       <div className="mx-auto max-w-2xl">
         <PageTitle title="Nota ràpida" />
-        <p className="text-muted">
-          Encara no hi ha alumnes.{" "}
-          <Link to="/alumnes" className="font-bold text-ink underline">
-            Afegeix la llista de la classe
-          </Link>
-          .
-        </p>
+        <div className="space-y-4 rounded-xl border border-line bg-card p-5">
+          <p>Per començar a escriure notes, primer cal:</p>
+          <ul className="list-disc space-y-1 pl-6">
+            {!students.length && (
+              <li>
+                <Link to="/alumnes" className="font-bold underline underline-offset-4">
+                  Afegir la llista de la classe
+                </Link>
+              </li>
+            )}
+            {!areas.length && (
+              <li>
+                <Link to="/arees" className="font-bold underline underline-offset-4">
+                  Afegir les àrees
+                </Link>
+              </li>
+            )}
+          </ul>
+          {store.isEmpty && (
+            <div className="border-t border-line pt-4 text-muted">
+              Només vols fer una prova? <LoadFakeDataButton />
+            </div>
+          )}
+        </div>
       </div>
     );
   }
