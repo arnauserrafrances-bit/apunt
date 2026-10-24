@@ -12,7 +12,7 @@ The one thing this MVP must prove: **a tutor can check and fix an AI report in u
 
 ## What the MVP deliberately does NOT do (thrown away for now)
 - Accounts, login and sync between devices (Supabase). The encryption module is built and tested, but it is not connected until the AI report is proven.
-- Phone app, voice dictation and publishing as a PWA on Vercel.
+- Phone app, voice dictation and a real PWA for teachers. (A public demo link with fake data exists only so others can try the prototype.)
 - Learning the teacher's style from her edits (the Session 5 "teacher memory" defense).
 - Word or PDF export (the report is plain text to copy).
 - Connecting to the school's official platform.
@@ -21,6 +21,6 @@ The one thing this MVP must prove: **a tutor can check and fix an AI report in u
 ## Rule for adding features later
 We will only add a new feature if a real user does this:
 - **Accounts + sync + phone:** my mother (and at least one colleague) write real notes for two weeks in a row without me asking, and say they would write more if they could do it from the phone.
-- **Publishing (Vercel):** a second teacher who is not my mother wants to use it on her own computer.
+- **Publishing for real teachers (with real data):** a second teacher who is not my mother wants to use it on her own computer.
 - **Style learning:** a teacher has corrected at least 10 real reports, so there is real draft-vs-final data to learn from.
 - **Export to Word/PDF:** a teacher has to submit reports in a format where copy-paste does not work.
