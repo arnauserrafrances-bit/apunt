@@ -13,7 +13,7 @@ Apunt (working name). A tool for primary tutors in Catalonia: during the term th
 - Offline first: every change is saved on the device first and uploaded later, so a note is never lost because of a bad connection.
 
 ## Stack and key dependencies
-- Interface: React + Vite + Tailwind 4 + TypeScript, published as a PWA on Vercel (planned, phase 7). Calm, easy-to-read design (Atkinson Hyperlegible, 18 px, few colours). Works on laptop and phone.
+- Interface: React + Vite + Tailwind 4 + TypeScript. A public demo with fake data runs on Vercel (https://apunt-ecru.vercel.app), deployed automatically from GitHub on every push; the real PWA for teachers is still planned. Calm, easy-to-read design (Atkinson Hyperlegible, 18 px, few colours). Works on laptop and phone.
 - Accounts and data: Supabase free plan, EU region (planned, phases 3–4). Email + password login, Postgres with Row Level Security on every table. Supabase only receives encrypted records.
 - Local storage: today localStorage with fake data (prototype); next, encrypted IndexedDB behind the same `Repository` interface, so the screens do not change.
 - Encryption: libsodium (`libsodium-wrappers-sumo`) + WebCrypto only — Argon2id for the password, XChaCha20-Poly1305 for the data, BLAKE2b for salts. Built and tested (`lib/crypto.ts`, `lib/backup.ts`). Details in `security-note.md`.
