@@ -242,8 +242,8 @@ const FLAGS_TOOL: Tool = {
 };
 
 /**
- * Crida Claude obligant-lo a respondre amb una eina (tool use): la resposta arriba sempre com a
- * objecte amb l'estructura de l'eina, sense haver de buscar JSON dins d'un text.
+ * Crida Claude oferint-li una eina (tool use) amb l'estructura exacta de la resposta. Si la fa servir,
+ * la resposta arriba ja com a objecte; si respon amb text, en llegim el JSON.
  */
 async function callClaude(apiKey: string, model: string, system: string, user: string, maxTokens: number, tool: Tool): Promise<unknown> {
   const r = await fetch(API_URL, {
@@ -254,7 +254,8 @@ async function callClaude(apiKey: string, model: string, system: string, user: s
       max_tokens: maxTokens,
       system,
       tools: [tool],
-      tool_choice: { type: "tool", name: tool.name },
+      // Alguns models no accepten forçar l'eina: l'oferim i el prompt li diu que l'ha de fer servir.
+      tool_choice: { type: "auto" },
       messages: [{ role: "user", content: user }],
     }),
   });
@@ -272,7 +273,12 @@ async function callClaude(apiKey: string, model: string, system: string, user: s
   if (used?.input && typeof used.input === "object") return used.input;
   // Per si de cas: si la IA ha respost amb text, intentem llegir-hi el JSON.
   const text = (data.content ?? []).filter((c) => c.type === "text").map((c) => c.text ?? "").join("");
-  return extractJson(text);
+  try {
+    return extractJson(text);
+  } catch {
+    const start = text.trim().slice(0, 160);
+    throw new Error(start ? `La IA no ha retornat l'informe en el format esperat. Ha respost: «${start}…»` : "La IA ha retornat una resposta buida.");
+  }
 }
 
 export async function buildReport(req: ReportRequest, env: Record<string, string | undefined>): Promise<ReportResponse> {

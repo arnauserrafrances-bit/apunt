@@ -224,7 +224,7 @@ describe("resposta de la IA", () => {
     vi.stubEnv("APUNT_ACCESS_CODE", "secret");
     vi.stubEnv("ANTHROPIC_API_KEY", "sk-test");
   });
-  it("obliga a fer servir l'eina write_report", async () => {
+  it("ofereix l'eina write_report (sense forçar-la)", async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(claudeReply({ areas: [{ areaId: "mat", sentences: ["Frase."] }] }))
@@ -234,8 +234,9 @@ describe("resposta de la IA", () => {
     await handler({ method: "POST", headers: { "x-apunt-code": "secret" }, body: req }, res);
     expect(out.code).toBe(200);
     const body = JSON.parse(fetchMock.mock.calls[0][1].body);
-    expect(body.tool_choice).toEqual({ type: "tool", name: "write_report" });
-    expect(JSON.parse(fetchMock.mock.calls[1][1].body).tool_choice.name).toBe("report_flags");
+    expect(body.tool_choice).toEqual({ type: "auto" });
+    expect(body.tools[0].name).toBe("write_report");
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body).tools[0].name).toBe("report_flags");
   });
   it("encara entén una resposta en text amb JSON", async () => {
     vi.stubGlobal(
@@ -262,5 +263,17 @@ describe("resposta de la IA", () => {
     await handler({ method: "POST", headers: { "x-apunt-code": "secret" }, body: req }, res);
     expect(out.code).toBe(200);
     expect(out.body).toEqual({ areas: [{ areaId: "mat", sentences: [{ text: "Frase." }] }] });
+  });
+});
+
+describe("resposta sense format", () => {
+  it("ensenya el principi del que ha respost la IA", async () => {
+    vi.stubEnv("APUNT_ACCESS_CODE", "secret");
+    vi.stubEnv("ANTHROPIC_API_KEY", "sk-test");
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ stop_reason: "end_turn", content: [{ type: "text", text: "No puc fer-ho perquè…" }] }) }));
+    const { res, out } = fakeRes();
+    await handler({ method: "POST", headers: { "x-apunt-code": "secret" }, body: req }, res);
+    expect(out.code).toBe(502);
+    expect((out.body as { error: string }).error).toContain("No puc fer-ho");
   });
 });
