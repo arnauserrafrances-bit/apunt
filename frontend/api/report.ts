@@ -58,6 +58,7 @@ CRITERIS DE LA TUTORA PER A CADA PARÀGRAF
 - Cada informe ha de ser diferent i reflectir el progrés real d'aquest alumne: evita frases fetes repetides.
 - NO repeteixis la mateixa paraula en frases properes (per exemple «mostra», «necessita», «treballa», «actitud»): fes servir sinònims o reformula la frase perquè el text soni natural.
 - NO repeteixis la mateixa idea en dos paràgrafs diferents: cada informació apareix una sola vegada, a l'àrea on encaixa millor.
+- Redacta SEMPRE en positiu: és un informe de valoració per a la família. Les dificultats es presenten com a aspectes a millorar o objectius («cal continuar treballant…», «l'animem a…», «és important que…»), mai com a frases negatives («no sap…», «no fa…», «és incapaç de…»).
 
 COM HO HAS D'ESCRIURE (l'estil de la tutora)
 - Català correcte, to proper i professional. Parles de l'alumne en tercera persona; quan parles de l'escola fas servir el plural («ens agradaria que…», «volem destacar…»).

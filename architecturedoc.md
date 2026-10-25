@@ -1,7 +1,7 @@
 # architecturedoc.md
 
 ## Venture
-Apunt (working name). A tool for primary tutors in Catalonia: during the term the tutor writes very short notes about each student (typed on the computer or dictated on the phone), and at report time the AI turns those notes into 6–8 sentences per subject area in Catalan. Real student names never reach the AI, and the server only ever stores encrypted data it cannot read.
+Apunt (working name). A tool for primary tutors in Catalonia to write term reports: the tutor answers a short questionnaire about each student (and/or writes a free paragraph or notes during the term), and the AI writes the report as a letter to the family, in Catalan, following the school's model and the tutor's own style. The tutor reviews it with an AI assistant chat beside the text. Real student names never reach the AI, and the server only ever stores encrypted data it cannot read.
 
 ## Architectural principles
 - Real student names never go to the AI. Each student has a code (A-01, A-02…). Names are replaced on the device before anything is sent, and put back at the very end.
@@ -40,13 +40,13 @@ Apunt (working name). A tool for primary tutors in Catalonia: during the term th
 - The prototype still runs with fake data in the browser and needs a terminal to start (`npm run dev`). We gain: we test the design with a real tutor before building the back end.
 
 ## Plan
-Done: clickable prototype with fake data; name replacement; encryption and backup module with tests (phase 1).
+Done: clickable prototype; name replacement with correct Catalan articles; encryption and backup module (phase 1); real AI connected (Vercel function: Sonnet drafts, Haiku checks); questionnaire mode (7 blocks, the tutor's own questions); free paragraph; school model and example report; letter format; AI assistant chat beside the report; public demo on Vercel.
 
-New order (changed after the Session 5 feedback): the riskiest guess is that the AI can write a report good enough for a tutor to check in under 15 minutes per student. Everything else is safe engineering, so the AI is tested first.
-1. Test the AI report by hand, without code: a tutor's real notes for 3 students (names replaced by codes) through Claude with Apunt's rules; she corrects each report and we time it.
-2. If it works: connect the real AI to the Informe screen (name check → Sonnet draft → Haiku checker → names back), still on one computer.
-3. If it does not work: fix the prompt and the note format before building anything else.
-4. Only after that: store ready to sync (phase 2, half done) → accounts and keyring → encrypted sync → phone and dictation → PWA and publishing on Vercel → password change and recovery email → pending-upload indicator → clean-up.
+Next, in this order (riskiest first):
+1. Learn the tutor's preferences from her edits and chat requests (Session 7 learning loop): she said ChatGPT "learns faster" what she wants. Store each preference she confirms and send it with the next reports, with her approval.
+2. Voice notes from the phone during the term: the feature the tutor wants most, and the one that would make her pay. Test it with her for two weeks: does she really record notes, and does the report take less time?
+3. Test with more tutors (her school's staff), using the school's standard model per course and term.
+4. Only after that: accounts and encrypted sync (store ready to sync is half done) → phone app (PWA) → password recovery → clean-up.
 
 ## Defense: the teacher-memory data cycle (Session 5)
 - What: for every report Apunt keeps the AI draft and the final text the teacher sends, plus how much of the draft she kept (% kept). Together with the term's tagged notes (student, area, date), this teaches Apunt her students and her writing style, so each term's drafts need fewer edits.
@@ -55,9 +55,9 @@ New order (changed after the Session 5 feedback): the riskiest guess is that the
 - First step (planned, after the real AI is connected): save the draft and the final version when the teacher approves a report, and show the % kept on the Informe screen.
 
 ## Open assumptions
-- Teachers will write notes during the term, not only the week before the reports.
-- Checking our draft takes less than 15 minutes per student (today: about 30 minutes with ChatGPT).
-- Teachers will pay around €9 per term out of their own pocket.
+- (Session 6: NOT confirmed) Teachers will write notes during the term. The real tutor does not; she answers a questionnaire at report time. She says she would take notes if she could dictate them by voice: still to test.
+- Checking our draft takes less than 15 minutes per student. Session 6 test: exactly 15 minutes per student (3 students), plus 10–15 minutes for the questionnaire; about 28 minutes in total versus about 45 with her ChatGPT method.
+- Teachers will pay for Apunt. Session 6: the tutor says she would pay, above all with voice notes (no amount discussed). Plan: one free trial term, then a subscription; price to be set from the real AI cost per report and what the first tutors are willing to pay.
 - Teachers will trust an app with notes about children if it is end-to-end encrypted and names never reach the AI.
 - The name replacement catches enough names that teachers trust it, and the preview step does not annoy them.
 - 6–8 sentences per area written from short notes will sound like the teacher, not like an AI.
@@ -68,3 +68,5 @@ New order (changed after the Session 5 feedback): the riskiest guess is that the
 - Session 4: Dropped Streamlit after step 1 and moved the interface to React + Vite + Tailwind; Python + SQLite stays for data. Built a clickable prototype in Catalan with fake data (25 students, 7 areas, about 60 notes): Nota ràpida, Classe, Fitxa de l'alumne, Àrees, Alumnes and Informe (with a fake report and fake checker flags). Wrote and tested the name-replacement logic (it asks the teacher when a name is unclear). New guesses: the number-key flow for areas is fast enough; the final report should use first names only.
 - Between sessions 4 and 5: Decided the real use is notes from the phone and reports on the computer, so the app needs accounts and sync. To keep children's data safe, chose end-to-end encryption with Supabase as a "blind" server. Built and tested the encryption and backup module (phase 1). Started phase 2 (UUID ids, empty store, fake data only on request).
 - Session 5: Copycat test — an AI rebuilt the interface, notes and report generation in minutes, so features are not a defense. Chose a per-teacher data cycle ("teacher memory") as the one defense, and added the `report_version` record and the % kept metric to the plan. Honest gaps: no distribution beyond one school, no network effects, and the defense only protects a teacher after a full term of use.
+- Session 6 (13 Oct, in class): moved the prototype to React and built the encryption and backup module (commits 44edec4 and 045ca51).
+- Session 6 follow-up (24–25 Oct), after the professor's feedback to test the riskiest guess first: connected the real AI and ran a test with a real tutor (my mother, 5th grade) on 3 real students, with names replaced by codes on her computer. What we learned changed the product: she does not take notes during the term, she answers a questionnaire, so Apunt now has her questionnaire; she wanted help while editing, so Apunt now has an assistant chat (select text → «Assistència» → apply). Result: about 28 minutes per student versus about 45 with ChatGPT; review exactly 15 minutes. Her corrections: repeated words and ideas, negative sentences; both are now rules in the prompt. Commitment: she will use Apunt for her 25 students this term and show it to the whole staff; she would pay, above all if it has voice notes during the term, which is now step 2 of the plan. Weak point she named: it does not learn her preferences as fast as ChatGPT, which becomes the Session 7 learning loop.

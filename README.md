@@ -11,14 +11,18 @@ Open it and press **"Carrega dades de prova"** to load 25 invented students. The
 - [security-note.md](security-note.md) – how student data is protected and the known limitations
 
 ## What works today
-- Clickable prototype in Catalan: Nota ràpida, Classe, Fitxa de l'alumne, Àrees, Alumnes and Informe.
-- Name replacement (student names → codes A-01, A-02…, asking the teacher when a name is unclear).
-- End-to-end encryption and backup module (libsodium), tested but not yet connected to the screens.
-- 40 automated tests.
+- **Questionnaire** per student (7 blocks, built from a real tutor's questions) and a free paragraph; notes during the term also work.
+- **Real AI report** (Vercel function: Claude Sonnet drafts, Claude Haiku checks every sentence against the tutor's answers). Student names are replaced by codes (A-01…) on the device before anything is sent, and put back at the end with the correct Catalan article.
+- **School model and example report**: the tutor pastes her school's guidelines and a report she likes; the AI follows them.
+- **Letter format** ready to copy: greeting, one paragraph per area, farewell for the term.
+- **Assistant chat** beside the report: select text → «Assistència» → ask for synonyms or a rewrite → apply.
+- End-to-end encryption and backup module (libsodium), tested but not yet connected to accounts.
+- 87 automated tests.
 
 ## What does not work yet (honestly)
-- The report on the Informe screen is **simulated**: the real AI is not connected yet. It is being tested by hand first with a real tutor (see the plan in architecturedoc.md).
-- No accounts, sync or phone version. Data stays in your own browser (localStorage).
+- No accounts, sync or phone version: data stays in the tutor's own browser.
+- The AI does not yet learn the tutor's preferences from her edits (next step).
+- The AI part of the demo needs an access code, so the public demo does not spend credits. Without it, the report is simulated.
 
 ## Run it locally
 ```bash

@@ -85,7 +85,7 @@ Com respons:
 - Si et demana canviar el text (reformular, escurçar, canviar una paraula, treure una repetició…), posa a "edits" el paràgraf SENCER de cada àrea afectada amb el canvi fet (amb el seu areaId), i a "reply" una frase curta dient què has canviat.
 - Canvia només el que et demana. No afegeixis informació nova sobre l'alumne que no sigui a l'informe.
 - Mantén els codis dels alumnes amb el seu article (la A-01, en A-01, l'A-01) exactament com són. No escriguis noms de persones.
-- Escriu en català correcte, amb el to de l'informe (proper, professional, en plural quan parla l'escola). Evita repetir paraules en frases properes.
+- Escriu en català correcte, amb el to de l'informe (proper, professional, en plural quan parla l'escola). Evita repetir paraules en frases properes. Redacta en positiu: les dificultats com a aspectes a millorar, mai amb frases negatives.
 - Respon sempre en català i de manera breu: la tutora vol anar ràpid.
 
 Dona la resposta fent servir l'eina chat_reply.`;
