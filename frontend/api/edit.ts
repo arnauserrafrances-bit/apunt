@@ -1,6 +1,60 @@
 // Xat d'assistència: mentre revisa l'informe, la tutora parla amb la IA. Pot citar un fragment del text
 // (com un "reply") i demanar sinònims, reformular, escurçar… Rep text amb codis (A-01), mai noms.
-import { callClaude, sameCode, type Tool } from "./report";
+// Aquest fitxer és independent (no importa res d'altres fitxers): a Vercel cada funció
+// s'executa com a mòdul ESM de Node i un import sense extensió ("./report") fa petar la funció.
+
+const API_URL = "https://api.anthropic.com/v1/messages";
+
+interface Tool {
+  name: string;
+  description: string;
+  input_schema: Record<string, unknown>;
+}
+
+function sameCode(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
+function extractJson(text: string): unknown {
+  const start = text.indexOf("{");
+  const end = text.lastIndexOf("}");
+  if (start < 0 || end <= start) throw new Error("La IA no ha retornat JSON.");
+  return JSON.parse(text.slice(start, end + 1));
+}
+
+async function callClaude(apiKey: string, model: string, system: string, user: string, maxTokens: number, tool: Tool): Promise<unknown> {
+  const r = await fetch(API_URL, {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
+    body: JSON.stringify({
+      model,
+      max_tokens: maxTokens,
+      system,
+      tools: [tool],
+      tool_choice: { type: "auto" },
+      messages: [{ role: "user", content: user }],
+    }),
+  });
+  if (!r.ok) {
+    const detail = (await r.json().catch(() => null)) as { error?: { message?: string } } | null;
+    throw new Error(`Error de l'API (${r.status})${detail?.error?.message ? `: ${detail.error.message}` : "."}`);
+  }
+  const data = (await r.json()) as { stop_reason?: string; content?: { type: string; text?: string; name?: string; input?: unknown }[] };
+  if (data.stop_reason === "max_tokens") throw new Error("La resposta de la IA era massa llarga i s'ha tallat.");
+  const used = (data.content ?? []).find((c) => c.type === "tool_use" && c.name === tool.name);
+  if (used?.input && typeof used.input === "object") return used.input;
+  const text = (data.content ?? []).filter((c) => c.type === "text").map((c) => c.text ?? "").join("").trim();
+  try {
+    return extractJson(text);
+  } catch {
+    // Al xat, una resposta en text normal també serveix.
+    if (text) return { reply: text };
+    throw new Error("La IA ha retornat una resposta buida.");
+  }
+}
 
 export interface ChatParagraph {
   areaId: string;
