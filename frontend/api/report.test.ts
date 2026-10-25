@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import handler, { extractJson, mergeReport, notesBlock, validateRequest, type ReportRequest } from "./report";
 
 const req: ReportRequest = {
@@ -11,6 +11,10 @@ const req: ReportRequest = {
 };
 
 function claudeReply(obj: unknown) {
+  const name = obj && typeof obj === "object" && "flags" in obj ? "report_flags" : "write_report";
+  return { ok: true, status: 200, json: async () => ({ stop_reason: "tool_use", content: [{ type: "tool_use", name, input: obj }] }) };
+}
+function claudeTextReply(obj: unknown) {
   return { ok: true, status: 200, json: async () => ({ content: [{ type: "text", text: "```json\n" + JSON.stringify(obj) + "\n```" }] }) };
 }
 
@@ -212,4 +216,51 @@ describe("qüestionari i informe d'exemple", () => {
   });
   it("rebutja un exemple massa llarg", () =>
     expect(validateRequest({ ...q, exampleReport: "x".repeat(9000) })).toBeTypeOf("string"));
+});
+
+
+describe("resposta de la IA", () => {
+  beforeEach(() => {
+    vi.stubEnv("APUNT_ACCESS_CODE", "secret");
+    vi.stubEnv("ANTHROPIC_API_KEY", "sk-test");
+  });
+  it("obliga a fer servir l'eina write_report", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(claudeReply({ areas: [{ areaId: "mat", sentences: ["Frase."] }] }))
+      .mockResolvedValueOnce(claudeReply({ flags: [] }));
+    vi.stubGlobal("fetch", fetchMock);
+    const { res, out } = fakeRes();
+    await handler({ method: "POST", headers: { "x-apunt-code": "secret" }, body: req }, res);
+    expect(out.code).toBe(200);
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body.tool_choice).toEqual({ type: "tool", name: "write_report" });
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body).tool_choice.name).toBe("report_flags");
+  });
+  it("encara entén una resposta en text amb JSON", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValueOnce(claudeTextReply({ areas: [{ areaId: "mat", sentences: ["Frase."] }] })).mockResolvedValueOnce(claudeReply({ flags: [] })),
+    );
+    const { res, out } = fakeRes();
+    await handler({ method: "POST", headers: { "x-apunt-code": "secret" }, body: req }, res);
+    expect(out.code).toBe(200);
+  });
+  it("si la resposta es talla, ho diu clarament", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ stop_reason: "max_tokens", content: [] }) }));
+    const { res, out } = fakeRes();
+    await handler({ method: "POST", headers: { "x-apunt-code": "secret" }, body: req }, res);
+    expect(out.code).toBe(502);
+    expect((out.body as { error: string }).error).toContain("massa llarga");
+  });
+  it("si el revisor falla, retorna l'informe sense marques", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValueOnce(claudeReply({ areas: [{ areaId: "mat", sentences: ["Frase."] }] })).mockResolvedValueOnce({ ok: false, status: 529, json: async () => ({}) }),
+    );
+    const { res, out } = fakeRes();
+    await handler({ method: "POST", headers: { "x-apunt-code": "secret" }, body: req }, res);
+    expect(out.code).toBe(200);
+    expect(out.body).toEqual({ areas: [{ areaId: "mat", sentences: [{ text: "Frase." }] }] });
+  });
 });

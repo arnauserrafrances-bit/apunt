@@ -76,7 +76,7 @@ Notes: «03/10: en A-07 fa bé les restes portant però s'equivoca en les divisi
 Paràgraf: «En l'àrea de matemàtiques, en A-07 resol amb seguretat les restes portant, tot i que encara comet errades en les divisions. Li costa explicar el procediment que ha seguit per resoldre un problema, de manera que cal continuar treballant l'expressió del raonament matemàtic. En geometria, reconeix correctament els angles treballats.»
 
 FORMAT DE LA RESPOSTA
-Respon NOMÉS amb un objecte JSON, sense cap text abans ni després. Cada paràgraf va partit en frases dins de "sentences", en ordre. "closing" és un paràgraf final opcional (vegeu el model de l'escola, si n'hi ha); si no cal, deixa'l buit:
+Dona la resposta fent servir l'eina write_report. Cada paràgraf va partit en frases dins de "sentences", en ordre. "closing" és un paràgraf final opcional (vegeu el model de l'escola, si n'hi ha); si no cal, deixa'l buit. L'estructura és:
 {"areas":[{"areaId":"<id de l'àrea>","sentences":["frase 1","frase 2"]}],"closing":["frase 1"]}`;
 
 function exampleSection(example: string): string {
@@ -117,7 +117,7 @@ Marca una frase si:
 
 No marquis una frase només perquè reformula una nota amb altres paraules, perquè comença amb una entrada com «En l'àmbit lingüístic,» o perquè connecta dues idees de les notes. El que importa és que el contingut surti de les notes.
 
-Respon NOMÉS amb un objecte JSON, sense cap text abans ni després:
+Dona la resposta fent servir l'eina report_flags, amb aquesta estructura:
 {"flags":[{"areaId":"<id>","index":<número de frase, començant per 0>,"reason":"motiu breu en català"}]}
 Si totes les frases són correctes, respon {"flags":[]}.`;
 
@@ -196,15 +196,83 @@ export function mergeReport(req: ReportRequest, draft: unknown, check: unknown):
   return { areas };
 }
 
-async function callClaude(apiKey: string, model: string, system: string, user: string, maxTokens: number): Promise<string> {
+interface Tool {
+  name: string;
+  description: string;
+  input_schema: Record<string, unknown>;
+}
+
+const REPORT_TOOL: Tool = {
+  name: "write_report",
+  description: "Retorna l'informe: un paràgraf per àrea, partit en frases, i un paràgraf final opcional.",
+  input_schema: {
+    type: "object",
+    properties: {
+      areas: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: { areaId: { type: "string" }, sentences: { type: "array", items: { type: "string" } } },
+          required: ["areaId", "sentences"],
+        },
+      },
+      closing: { type: "array", items: { type: "string" } },
+    },
+    required: ["areas"],
+  },
+};
+
+const FLAGS_TOOL: Tool = {
+  name: "report_flags",
+  description: "Retorna les frases de l'informe que no surten de les notes, amb el motiu.",
+  input_schema: {
+    type: "object",
+    properties: {
+      flags: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: { areaId: { type: "string" }, index: { type: "integer" }, reason: { type: "string" } },
+          required: ["areaId", "index", "reason"],
+        },
+      },
+    },
+    required: ["flags"],
+  },
+};
+
+/**
+ * Crida Claude obligant-lo a respondre amb una eina (tool use): la resposta arriba sempre com a
+ * objecte amb l'estructura de l'eina, sense haver de buscar JSON dins d'un text.
+ */
+async function callClaude(apiKey: string, model: string, system: string, user: string, maxTokens: number, tool: Tool): Promise<unknown> {
   const r = await fetch(API_URL, {
     method: "POST",
     headers: { "content-type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
-    body: JSON.stringify({ model, max_tokens: maxTokens, system, messages: [{ role: "user", content: user }] }),
+    body: JSON.stringify({
+      model,
+      max_tokens: maxTokens,
+      system,
+      tools: [tool],
+      tool_choice: { type: "tool", name: tool.name },
+      messages: [{ role: "user", content: user }],
+    }),
   });
-  if (!r.ok) throw new Error(`Error de l'API (${r.status}).`);
-  const data = (await r.json()) as { content?: { type: string; text?: string }[] };
-  return (data.content ?? []).filter((c) => c.type === "text").map((c) => c.text ?? "").join("");
+  if (!r.ok) {
+    const detail = (await r.json().catch(() => null)) as { error?: { message?: string } } | null;
+    throw new Error(`Error de l'API (${r.status})${detail?.error?.message ? `: ${detail.error.message}` : "."}`);
+  }
+  const data = (await r.json()) as {
+    stop_reason?: string;
+    content?: { type: string; text?: string; name?: string; input?: unknown }[];
+  };
+  if (data.stop_reason === "max_tokens")
+    throw new Error("La resposta de la IA era massa llarga i s'ha tallat. Torna-ho a provar o escurça les respostes.");
+  const used = (data.content ?? []).find((c) => c.type === "tool_use" && c.name === tool.name);
+  if (used?.input && typeof used.input === "object") return used.input;
+  // Per si de cas: si la IA ha respost amb text, intentem llegir-hi el JSON.
+  const text = (data.content ?? []).filter((c) => c.type === "text").map((c) => c.text ?? "").join("");
+  return extractJson(text);
 }
 
 export async function buildReport(req: ReportRequest, env: Record<string, string | undefined>): Promise<ReportResponse> {
@@ -217,7 +285,7 @@ export async function buildReport(req: ReportRequest, env: Record<string, string
   const guide = req.guide?.trim();
   const example = req.exampleReport?.trim();
   const system = DRAFT_SYSTEM + (guide ? guideSection(guide) : "") + (example ? exampleSection(example) : "");
-  const draft = extractJson(await callClaude(apiKey, draftModel, system, notes, 8000));
+  const draft = await callClaude(apiKey, draftModel, system, notes, 12000, REPORT_TOOL);
   if (env.APUNT_SKIP_CHECK === "1") return mergeReport(req, draft, { flags: [] });
   const draftForCheck = withClosing(draft)
     .filter((a) => Array.isArray(a.sentences))
@@ -230,9 +298,13 @@ export async function buildReport(req: ReportRequest, env: Record<string, string
       ].join("\n"),
     )
     .join("\n\n");
-  const check = extractJson(
-    await callClaude(apiKey, checkModel, CHECK_SYSTEM, `NOTES DE LA TUTORA\n${notes}\n\nINFORME\n${draftForCheck}`, 2000),
-  );
+  // Si el revisor falla, no perdem l'informe: es retorna sense marques.
+  let check: unknown = { flags: [] };
+  try {
+    check = await callClaude(apiKey, checkModel, CHECK_SYSTEM, `NOTES DE LA TUTORA\n${notes}\n\nINFORME\n${draftForCheck}`, 4000, FLAGS_TOOL);
+  } catch {
+    check = { flags: [] };
+  }
   return mergeReport(req, draft, check);
 }
 
