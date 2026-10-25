@@ -2,6 +2,7 @@ import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "
 import { Link, useNavigate, useParams } from "react-router";
 import { ChatPanel, type Quote } from "../components/ChatPanel";
 import { ConfirmDialog } from "../components/ConfirmDialog";
+import { ErrorBoundary } from "../components/ErrorBoundary";
 import { FreeTextEditor } from "../components/FreeTextEditor";
 import { Questionnaire } from "../components/Questionnaire";
 import { ALL_QUESTIONS, QUESTIONNAIRE } from "../data/questionnaire";
@@ -779,6 +780,7 @@ function Review({ student, report }: { student: Student; report: Report }) {
       </ConfirmDialog>
     </div>
     <aside className="self-start lg:sticky lg:top-6">
+      <ErrorBoundary label="l'assistent">
       <ChatPanel
         paragraphs={ordered.map((r) => ({ areaId: r.areaId, name: areaById.get(r.areaId)?.name ?? r.areaId, text: areaReportText(r) }))}
         areaName={(id) => areaById.get(id)?.name ?? id}
@@ -789,6 +791,7 @@ function Review({ student, report }: { student: Student; report: Report }) {
         students={store.students}
         inputRef={chatInput}
       />
+      </ErrorBoundary>
     </aside>
     </div>
   );

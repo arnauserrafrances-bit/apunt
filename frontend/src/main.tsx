@@ -6,6 +6,7 @@ import { APP_NAME } from "./config";
 import { StoreProvider } from "./store/AppStore";
 import { LocalStorageRepository } from "./store/repository";
 import { ToastProvider } from "./components/Toast";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import "./index.css";
 
 document.title = APP_NAME;
@@ -17,7 +18,9 @@ createRoot(document.getElementById("root")!).render(
     <BrowserRouter>
       <StoreProvider repository={repository}>
         <ToastProvider>
-          <App />
+          <ErrorBoundary>
+            <App />
+          </ErrorBoundary>
         </ToastProvider>
       </StoreProvider>
     </BrowserRouter>
