@@ -50,7 +50,11 @@ export function ChatPanel({
   const bottom = useRef<HTMLDivElement>(null);
   const leaks = countNameLeaks(text, students);
 
-  useEffect(() => bottom.current?.scrollIntoView({ block: "end", behavior: "smooth" }), [messages, busy]);
+  // Cos amb claus: l'efecte no ha de retornar res. (A Chrome nou, scrollIntoView retorna una promesa,
+  // i React la intentaria cridar com a funció de neteja: «l is not a function».)
+  useEffect(() => {
+    bottom.current?.scrollIntoView({ block: "end", behavior: "smooth" });
+  }, [messages, busy]);
 
   const send = async () => {
     const message = text.trim();
