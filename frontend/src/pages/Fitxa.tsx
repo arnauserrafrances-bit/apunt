@@ -102,7 +102,15 @@ export default function Fitxa() {
       </div>
 
       <div className="mb-8">
-        <FreeTextEditor key={`${student.id}-${currentTerm}`} student={student} />
+        <FreeTextEditor
+          key={`${student.id}-${currentTerm}`}
+          student={student}
+          action={
+            <Link to={`/informe/${student.code}`} className="btn btn-primary">
+              Classifica per àmbits i fes l'informe →
+            </Link>
+          }
+        />
       </div>
 
       <h2 className="mb-3 text-xl font-bold">Notes</h2>

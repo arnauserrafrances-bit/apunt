@@ -289,7 +289,23 @@ function Preview({ student }: { student: Student }) {
 
   return (
     <div className="space-y-6">
-      <FreeTextEditor student={student} compact />
+      <FreeTextEditor
+        student={student}
+        compact
+        action={
+          <button className="btn btn-primary" disabled={pending > 0 || leaks > 0} onClick={generate}>
+            {useAi ? "Classifica per àmbits i genera l'informe" : "Genera un informe simulat"}
+          </button>
+        }
+      />
+      {hasFree && !useAi && (
+        <p className="-mt-3 text-sm text-warn-ink">
+          Per classificar el text per àmbits cal la IA: escriu el codi d'accés més avall.
+        </p>
+      )}
+      {hasFree && pending > 0 && (
+        <p className="-mt-3 text-sm text-warn-ink">Abans de generar, decideix les paraules marcades de sota.</p>
+      )}
 
       {asks.length > 0 && (
         <section className="space-y-3">
