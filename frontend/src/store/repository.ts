@@ -13,10 +13,12 @@ export interface AppState {
   nextStudentNumber: number;
   /** Model d'informe de l'escola (text que enganxa la tutora). La IA el segueix. */
   reportGuide: string;
+  /** Text lliure de la tutora sobre cada alumne i trimestre (clau: `${studentId}-${term}`). */
+  freeTexts: Record<string, string>;
 }
 
 export function emptyState(): AppState {
-  return { students: [], areas: [], notes: [], reports: {}, currentTerm: 1, nextStudentNumber: 1, reportGuide: "" };
+  return { students: [], areas: [], notes: [], reports: {}, currentTerm: 1, nextStudentNumber: 1, reportGuide: "", freeTexts: {} };
 }
 
 export interface Repository {

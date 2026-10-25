@@ -155,5 +155,6 @@ export function createFakeData(): AppState {
     currentTerm: 1,
     nextStudentNumber: students.length + 1,
     reportGuide: "",
+    freeTexts: {},
   };
 }

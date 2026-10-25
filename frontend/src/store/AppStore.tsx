@@ -46,6 +46,9 @@ function useStoreValue(repository: Repository, initial: AppState) {
 
       setReportGuide: (text: string) => update(() => ({ reportGuide: text.trim() })),
 
+      setFreeText: (studentId: Id, term: Term, text: string) =>
+        update((s) => ({ freeTexts: { ...s.freeTexts, [reportKey(studentId, term)]: text } })),
+
       // ------------------------------------------------ Notes
       addNote: (n: Omit<Note, "id" | "createdAt">): Note => {
         const note: Note = { ...n, text: n.text.trim(), id: newId(), createdAt: Date.now() };
@@ -96,6 +99,7 @@ function useStoreValue(repository: Repository, initial: AppState) {
           reports: Object.fromEntries(
             Object.entries(s.reports).filter(([, r]) => r.studentId !== id),
           ),
+          freeTexts: Object.fromEntries(Object.entries(s.freeTexts).filter(([k]) => !k.startsWith(`${id}-`))),
         })),
 
       // ------------------------------------------------ Àrees

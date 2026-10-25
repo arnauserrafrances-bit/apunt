@@ -37,13 +37,20 @@ export async function requestAiReport(
   term: string,
   areas: AiAreaInput[],
   guide = "",
+  freeText = "",
 ): Promise<AreaReport[]> {
   let r: Response;
   try {
     r = await fetch("/api/report", {
       method: "POST",
       headers: { "content-type": "application/json", "x-apunt-code": accessCode },
-      body: JSON.stringify({ code, term, areas, ...(guide.trim() ? { guide: guide.trim() } : {}) }),
+      body: JSON.stringify({
+        code,
+        term,
+        areas,
+        ...(guide.trim() ? { guide: guide.trim() } : {}),
+        ...(freeText.trim() ? { freeText: freeText.trim() } : {}),
+      }),
     });
   } catch {
     throw new Error("No hi ha connexió amb el servidor.");

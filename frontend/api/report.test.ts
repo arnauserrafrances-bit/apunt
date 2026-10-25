@@ -150,3 +150,25 @@ describe("model de l'escola i valoració final", () => {
     expect((out.body as { areas: unknown[] }).areas).toHaveLength(1);
   });
 });
+
+describe("text lliure", () => {
+  const free: ReportRequest = {
+    code: "A-01",
+    term: "1r trimestre",
+    areas: [
+      { areaId: "ling", areaName: "Àmbit lingüístic", notes: [] },
+      { areaId: "mat", areaName: "Àmbit matemàtic", notes: [] },
+    ],
+    freeText: "La A-01 llegeix amb fluïdesa. En mates domina la multiplicació.",
+  };
+  it("accepta àrees sense notes si hi ha text lliure", () => expect(validateRequest(free)).toEqual(free));
+  it("sense text lliure, una àrea sense notes no és vàlida", () =>
+    expect(validateRequest({ ...free, freeText: undefined })).toBeTypeOf("string"));
+  it("rebutja un text lliure massa llarg", () =>
+    expect(validateRequest({ ...free, freeText: "x".repeat(7000) })).toBeTypeOf("string"));
+  it("el text lliure va al bloc que rep la IA", () => {
+    const t = notesBlock(free);
+    expect(t).toContain("Àrea: Àmbit lingüístic (id: ling)\n(sense notes)");
+    expect(t).toContain("Text lliure de la tutora (reparteix-lo per àrees):\nLa A-01 llegeix amb fluïdesa.");
+  });
+});

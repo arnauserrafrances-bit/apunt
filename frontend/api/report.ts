@@ -14,6 +14,8 @@ export interface ReportRequest {
   areas: AreaInput[];
   /** Model d'informe de l'escola, enganxat per la tutora (opcional). */
   guide?: string;
+  /** Text lliure de la tutora sobre l'alumne, ja anonimitzat. La IA el reparteix per àrees. */
+  freeText?: string;
 }
 export interface ReportSentenceOut {
   text: string;
@@ -26,6 +28,7 @@ export interface ReportResponse {
 const API_URL = "https://api.anthropic.com/v1/messages";
 const MAX_CHARS = 40_000;
 const MAX_GUIDE_CHARS = 8_000;
+const MAX_FREE_TEXT_CHARS = 6_000;
 /** Id del paràgraf final de valoració (no és cap àrea de la tutora). */
 export const CLOSING_ID = "closing";
 
@@ -33,7 +36,8 @@ const DRAFT_SYSTEM = `Ets l'assistent de redacció d'Apunt. Una tutora de primà
 
 QUÈ POTS DIR (regles sense excepció)
 1. Fes servir NOMÉS la informació de les notes. No inventis fets, no exageris, i no afegeixis consells, qualificacions ni comparacions amb altres alumnes que no surtin de les notes.
-2. Escriu només sobre les àrees que t'envio. Si una àrea té poques notes, escriu poques frases: és millor un paràgraf curt que inventar. Com a màxim 8 frases per àrea.
+2. Escriu només sobre les àrees que t'envio. Si una àrea té poca informació, escriu poques frases: és millor un paràgraf curt que inventar. Com a màxim 8 frases per àrea. Si d'una àrea no hi ha cap informació, no l'incloguis a la resposta.
+2b. Si hi ha un «Text lliure de la tutora», reparteix-ne cada informació a l'àrea on correspon i escriu-la al paràgraf d'aquella àrea, juntament amb les notes de l'àrea si n'hi ha. Cada informació va a una sola àrea. Si alguna informació no encaixa a cap àrea, posa-la a "closing".
 3. No escriguis cap nom propi de persona. A l'alumne l'anomenes pel codi.
 4. No escriguis salutació, introducció ni comiat: l'aplicació ja afegeix «Benvolguda família,», el paràgraf d'introducció i el comiat.
 
@@ -76,7 +80,7 @@ ${guide}
 </model>`;
 }
 
-const CHECK_SYSTEM = `Ets el revisor d'Apunt. Reps les notes d'una tutora sobre un alumne i l'informe que n'ha redactat una IA. Per a cada frase de l'informe, comprova-la contra les notes de la mateixa àrea.
+const CHECK_SYSTEM = `Ets el revisor d'Apunt. Reps les notes d'una tutora sobre un alumne i l'informe que n'ha redactat una IA. Per a cada frase de l'informe, comprova-la contra les notes de la mateixa àrea i contra el «Text lliure de la tutora», si n'hi ha (aquest text pot alimentar qualsevol àrea).
 
 Marca una frase si:
 - diu alguna cosa que no surt de les notes;
@@ -93,14 +97,18 @@ Si totes les frases són correctes, respon {"flags":[]}.`;
 export function validateRequest(body: unknown): ReportRequest | string {
   if (!body || typeof body !== "object") return "Petició buida.";
   const b = body as Partial<ReportRequest>;
+  const hasFree = typeof b.freeText === "string" && b.freeText.trim().length > 0;
   if (typeof b.code !== "string" || !/^[A-Z]-\d{2,}$/.test(b.code)) return "Codi d'alumne no vàlid.";
   if (typeof b.term !== "string") return "Falta el trimestre.";
   if (!Array.isArray(b.areas) || b.areas.length === 0 || b.areas.length > 15) return "Àrees no vàlides.";
   for (const a of b.areas) {
-    if (!a || typeof a.areaId !== "string" || typeof a.areaName !== "string" || !Array.isArray(a.notes) || a.notes.length === 0)
+    if (!a || typeof a.areaId !== "string" || typeof a.areaName !== "string" || !Array.isArray(a.notes))
       return "Àrea no vàlida.";
+    if (a.notes.length === 0 && !hasFree) return "Àrea sense notes.";
     for (const n of a.notes) if (!n || typeof n.text !== "string" || typeof n.date !== "string") return "Nota no vàlida.";
   }
+  if (b.freeText !== undefined && (typeof b.freeText !== "string" || b.freeText.length > MAX_FREE_TEXT_CHARS))
+    return "El text lliure és massa llarg.";
   if (b.guide !== undefined && (typeof b.guide !== "string" || b.guide.length > MAX_GUIDE_CHARS))
     return "El model d'informe és massa llarg.";
   if (JSON.stringify(b).length > MAX_CHARS) return "Hi ha massa text per a un sol informe.";
@@ -111,7 +119,12 @@ export function notesBlock(req: ReportRequest): string {
   return [
     `Alumne: ${req.code}`,
     `Trimestre: ${req.term}`,
-    ...req.areas.flatMap((a) => ["", `Àrea: ${a.areaName} (id: ${a.areaId})`, ...a.notes.map((n) => `- ${n.date}: ${n.text}`)]),
+    ...req.areas.flatMap((a) => [
+      "",
+      `Àrea: ${a.areaName} (id: ${a.areaId})`,
+      ...(a.notes.length ? a.notes.map((n) => `- ${n.date}: ${n.text}`) : ["(sense notes)"]),
+    ]),
+    ...(req.freeText?.trim() ? ["", "Text lliure de la tutora (reparteix-lo per àrees):", req.freeText.trim()] : []),
   ].join("\n");
 }
 

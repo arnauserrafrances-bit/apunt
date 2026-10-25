@@ -1,6 +1,7 @@
 import { Fragment, useMemo, useState, type ReactNode } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { ConfirmDialog } from "../components/ConfirmDialog";
+import { FreeTextEditor } from "../components/FreeTextEditor";
 import { PageTitle } from "../components/Layout";
 import { StudentSearch } from "../components/StudentSearch";
 import { useToast } from "../components/Toast";
@@ -18,7 +19,7 @@ import {
   type Segment,
 } from "../lib/anonymize";
 import { fullName } from "../lib/names";
-import { formatDate, plural } from "../lib/text";
+import { formatDate, plural, todayIso } from "../lib/text";
 import { reportKey, useStore } from "../store/AppStore";
 import type { Area, AreaReport, Id, Note, Report, Student } from "../types";
 
@@ -143,6 +144,13 @@ interface NoteSegments {
 function Preview({ student }: { student: Student }) {
   const store = useStore();
   const { students, areas, notes, currentTerm } = store;
+  const free = store.freeTexts[reportKey(student.id, currentTerm)] ?? "";
+  const hasFree = free.trim().length > 0;
+  const freeNote: Note = useMemo(
+    () => ({ id: "free", studentId: student.id, areaId: "", text: free, date: todayIso(), term: currentTerm, createdAt: 0 }),
+    [free, student.id, currentTerm],
+  );
+  const freeSegments = useMemo(() => (free.trim() ? analyze(free, students, "free:") : []), [free, students]);
   const [decisions, setDecisions] = useState<Record<string, Decision>>({});
   const [phase, setPhase] = useState<"idle" | "writing" | "reviewing">("idle");
   const [accessCode, setAccessCode] = useState(loadAccessCode);
@@ -163,7 +171,10 @@ function Preview({ student }: { student: Student }) {
 
   const withNotes = byArea.filter((a) => a.items.length);
   const empty = byArea.filter((a) => !a.items.length).map((a) => a.area);
-  const allItems = withNotes.flatMap((a) => a.items);
+  const allItems = [
+    ...withNotes.flatMap((a) => a.items),
+    ...(hasFree ? [{ note: freeNote, segments: freeSegments }] : []),
+  ];
   const asks = allItems.flatMap(({ note, segments }) =>
     segments.flatMap((s) => (s.kind === "ask" ? [{ note, ask: s }] : [])),
   );
@@ -179,6 +190,7 @@ function Preview({ student }: { student: Student }) {
       area.name,
       ...items.map(({ note, segments }) => `- ${formatDate(note.date)}: ${resolve(segments, decisions, students)}`),
     ]),
+    ...(hasFree ? ["", "Text lliure de la tutora:", resolve(freeSegments, decisions, students)] : []),
   ].join("\n");
   const leaks = countNameLeaks(outgoing, students);
   const replaced =
@@ -197,7 +209,7 @@ function Preview({ student }: { student: Student }) {
         accessCode.trim(),
         student.code,
         TERMS[currentTerm],
-        withNotes.map(({ area, items }) => ({
+        (hasFree ? byArea : withNotes).map(({ area, items }) => ({
           areaId: area.id,
           areaName: area.name,
           notes: items.map(({ note, segments }) => ({
@@ -206,11 +218,12 @@ function Preview({ student }: { student: Student }) {
           })),
         })),
         store.reportGuide,
+        hasFree ? resolve(freeSegments, decisions, students) : "",
       );
       store.saveReport({
         studentId: student.id,
         term: currentTerm,
-        emptyAreaIds: empty.map((a) => a.id),
+        emptyAreaIds: areas.filter((a) => !aiAreas.some((r) => r.areaId === a.id)).map((a) => a.id),
         areas: aiAreas,
       });
     } catch (e) {
@@ -223,32 +236,39 @@ function Preview({ student }: { student: Student }) {
     setPhase("writing");
     window.setTimeout(() => setPhase("reviewing"), 1200);
     window.setTimeout(() => {
+      // Simulat: el text lliure va tot a la primera àrea (la IA real el reparteix).
+      const sim = byArea
+        .map(({ area, items }, i) => ({
+          area,
+          texts: [
+            ...items.map((it) => resolve(it.segments, decisions, students)),
+            ...(i === 0 && hasFree ? [resolve(freeSegments, decisions, students)] : []),
+          ],
+        }))
+        .filter((a) => a.texts.length);
       const report: Report = {
         studentId: student.id,
         term: currentTerm,
-        emptyAreaIds: empty.map((a) => a.id),
-        areas: withNotes.map(({ area, items }) =>
-          fakeAreaReport(
-            area.id,
-            areas.indexOf(area) + 1,
-            student.code,
-            items.map((i) => resolve(i.segments, decisions, students)),
-            students.indexOf(student) + 1,
-          ),
+        emptyAreaIds: areas.filter((a) => !sim.some((x) => x.area.id === a.id)).map((a) => a.id),
+        areas: sim.map(({ area, texts }) =>
+          fakeAreaReport(area.id, areas.indexOf(area) + 1, student.code, texts, students.indexOf(student) + 1),
         ),
       };
       store.saveReport(report);
     }, 2200);
   };
 
-  if (!withNotes.length) {
+  if (!withNotes.length && !hasFree) {
     return (
-      <div className="warn-box">
-        {student.firstName} no té cap nota al {TERMS[currentTerm]}. No es pot escriure l'informe
-        sense notes.{" "}
-        <Link to={`/?alumne=${student.code}`} className="font-bold underline">
-          Escriu-ne una
-        </Link>
+      <div className="space-y-6">
+        <FreeTextEditor student={student} />
+        <div className="warn-box">
+          Escriu un text sobre {student.firstName} aquí dalt o{" "}
+          <Link to={`/?alumne=${student.code}`} className="font-bold underline">
+            afegeix notes
+          </Link>{" "}
+          per poder fer l'informe.
+        </div>
       </div>
     );
   }
@@ -269,6 +289,8 @@ function Preview({ student }: { student: Student }) {
 
   return (
     <div className="space-y-6">
+      <FreeTextEditor student={student} compact />
+
       {asks.length > 0 && (
         <section className="space-y-3">
           <h2 className="text-xl font-bold">
@@ -322,13 +344,27 @@ function Preview({ student }: { student: Student }) {
               ))}
             </div>
           ))}
+          {hasFree && (
+            <div className="mt-4">
+              <div className="font-bold">Text lliure de la tutora</div>
+              <Segments segments={freeSegments} decisions={decisions} students={students} />
+            </div>
+          )}
         </div>
       </section>
 
-      {empty.length > 0 && (
-        <div className="warn-box">
-          <strong>Sense notes, no s'escriurà res:</strong> {empty.map((a) => a.name).join(", ")}.
+      {hasFree ? (
+        <div className="card p-4 text-muted">
+          {useAi
+            ? "La IA repartirà el text entre les àrees i escriurà un paràgraf per a cada àrea de què parli. Les àrees de què no hi hagi res quedaran buides."
+            : "Informe simulat: el text lliure anirà tot a la primera àrea. Amb el codi d'accés, la IA el repartirà per àrees."}
         </div>
+      ) : (
+        empty.length > 0 && (
+          <div className="warn-box">
+            <strong>Sense notes, no s'escriurà res:</strong> {empty.map((a) => a.name).join(", ")}.
+          </div>
+        )
       )}
 
       <section className="card space-y-1 p-5">

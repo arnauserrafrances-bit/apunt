@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { ConfirmDialog } from "../components/ConfirmDialog";
+import { FreeTextEditor } from "../components/FreeTextEditor";
 import { NoteCard } from "../components/NoteCard";
 import { useToast } from "../components/Toast";
 import { TERMS } from "../config";
@@ -100,6 +101,11 @@ export default function Fitxa() {
         </div>
       </div>
 
+      <div className="mb-8">
+        <FreeTextEditor key={`${student.id}-${currentTerm}`} student={student} />
+      </div>
+
+      <h2 className="mb-3 text-xl font-bold">Notes</h2>
       <div className="mb-8 flex flex-wrap gap-2" role="radiogroup" aria-label="Filtre de trimestre">
         {filterOptions.map(([value, label]) => (
           <button
