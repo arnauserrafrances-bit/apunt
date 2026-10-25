@@ -56,6 +56,8 @@ CRITERIS DE LA TUTORA PER A CADA PARÀGRAF
 - A l'àmbit lingüístic, integra en un sol paràgraf l'expressió oral, l'expressió escrita, la lectura i la comprensió lectora, sense que sembli una enumeració.
 - Si l'àrea és de valoració final, comença amb una entrada com «Finalment, volem destacar…» i acaba amb les prioritats per al trimestre vinent.
 - Cada informe ha de ser diferent i reflectir el progrés real d'aquest alumne: evita frases fetes repetides.
+- NO repeteixis la mateixa paraula en frases properes (per exemple «mostra», «necessita», «treballa», «actitud»): fes servir sinònims o reformula la frase perquè el text soni natural.
+- NO repeteixis la mateixa idea en dos paràgrafs diferents: cada informació apareix una sola vegada, a l'àrea on encaixa millor.
 
 COM HO HAS D'ESCRIURE (l'estil de la tutora)
 - Català correcte, to proper i professional. Parles de l'alumne en tercera persona; quan parles de l'escola fas servir el plural («ens agradaria que…», «volem destacar…»).
@@ -196,7 +198,7 @@ export function mergeReport(req: ReportRequest, draft: unknown, check: unknown):
   return { areas };
 }
 
-interface Tool {
+export interface Tool {
   name: string;
   description: string;
   input_schema: Record<string, unknown>;
@@ -245,7 +247,7 @@ const FLAGS_TOOL: Tool = {
  * Crida Claude oferint-li una eina (tool use) amb l'estructura exacta de la resposta. Si la fa servir,
  * la resposta arriba ja com a objecte; si respon amb text, en llegim el JSON.
  */
-async function callClaude(apiKey: string, model: string, system: string, user: string, maxTokens: number, tool: Tool): Promise<unknown> {
+export async function callClaude(apiKey: string, model: string, system: string, user: string, maxTokens: number, tool: Tool): Promise<unknown> {
   const r = await fetch(API_URL, {
     method: "POST",
     headers: { "content-type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
@@ -314,7 +316,7 @@ export async function buildReport(req: ReportRequest, env: Record<string, string
   return mergeReport(req, draft, check);
 }
 
-function sameCode(a: string, b: string): boolean {
+export function sameCode(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
   let diff = 0;
   for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);

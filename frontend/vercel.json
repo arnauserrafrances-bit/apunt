@@ -1,4 +1,16 @@
 {
-  "functions": { "api/report.ts": { "maxDuration": 60 } },
-  "rewrites": [{ "source": "/((?!api/|assets/|bench\\.html).*)", "destination": "/index.html" }]
+  "functions": {
+    "api/report.ts": {
+      "maxDuration": 60
+    },
+    "api/edit.ts": {
+      "maxDuration": 60
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/((?!api/|assets/|bench\\.html).*)",
+      "destination": "/index.html"
+    }
+  ]
 }

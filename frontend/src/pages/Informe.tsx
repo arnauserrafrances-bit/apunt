@@ -1,5 +1,6 @@
-import { Fragment, useMemo, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useNavigate, useParams } from "react-router";
+import { ChatPanel, type Quote } from "../components/ChatPanel";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { FreeTextEditor } from "../components/FreeTextEditor";
 import { Questionnaire } from "../components/Questionnaire";
@@ -112,7 +113,7 @@ export function InformeAlumne() {
   const allApproved = !!report && report.areas.every((a) => a.approved);
 
   return (
-    <div className="mx-auto max-w-3xl">
+    <div className={`mx-auto ${report ? "max-w-6xl" : "max-w-3xl"}`}>
       <Link to="/informe" className="text-base text-muted hover:text-ink">
         ← Tots els alumnes
       </Link>
@@ -606,6 +607,32 @@ function Review({ student, report }: { student: Student; report: Report }) {
   const toast = useToast();
   const [showNames, setShowNames] = useState(false);
   const [restart, setRestart] = useState(false);
+  const [quote, setQuote] = useState<Quote | null>(null);
+  const [selection, setSelection] = useState<(Quote & { x: number; y: number }) | null>(null);
+  const chatInput = useRef<HTMLTextAreaElement>(null);
+
+  // Quan la tutora marca text dins d'un paràgraf, apareix el botó «Assistència».
+  useEffect(() => {
+    const check = () =>
+      window.setTimeout(() => {
+        const sel = window.getSelection();
+        const text = sel?.toString().trim() ?? "";
+        if (!sel || sel.isCollapsed || !text || !sel.rangeCount) return setSelection(null);
+        const host = (n: Node | null) => (n instanceof Element ? n : n?.parentElement)?.closest("[data-area-id]");
+        const a = host(sel.anchorNode);
+        if (!a || a !== host(sel.focusNode)) return setSelection(null);
+        const r = sel.getRangeAt(0).getBoundingClientRect();
+        setSelection({ areaId: a.getAttribute("data-area-id")!, text, x: r.left + r.width / 2, y: r.bottom });
+      }, 0);
+    document.addEventListener("mouseup", check);
+    document.addEventListener("touchend", check);
+    document.addEventListener("keyup", check);
+    return () => {
+      document.removeEventListener("mouseup", check);
+      document.removeEventListener("touchend", check);
+      document.removeEventListener("keyup", check);
+    };
+  }, []);
 
   const areaById = new Map<Id, Area>([
     ...store.areas.map((a) => [a.id, a] as const),
@@ -628,6 +655,21 @@ function Review({ student, report }: { student: Student; report: Report }) {
   const paragraphs = ordered.map((r) => areaReportText(r));
   const genders = guessGenders(paragraphs.join("\n"));
   const display = (t: string) => (showNames ? deanonymizeWithArticles(t, store.students, genders) : t);
+  // Si es veuen els noms, el fragment marcat els porta: els tornem a canviar pels codis abans d'enviar-lo.
+  const toCodes = (t: string) =>
+    showNames
+      ? store.students.reduce(
+          (acc, st) => acc.replace(new RegExp(`(?<![\\p{L}])${st.firstName}(?![\\p{L}])`, "gu"), st.code),
+          t,
+        )
+      : t;
+  const askAssistance = () => {
+    if (!selection) return;
+    setQuote({ areaId: selection.areaId, text: toCodes(selection.text) });
+    setSelection(null);
+    window.getSelection()?.removeAllRanges();
+    window.setTimeout(() => chatInput.current?.focus(), 0);
+  };
 
   const finalText = [
     `${fullName(student)} · ${TERMS[report.term]}`,
@@ -645,6 +687,17 @@ function Review({ student, report }: { student: Student; report: Report }) {
   };
 
   return (
+    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
+    {selection && (
+      <button
+        className="btn btn-primary fixed z-40 min-h-9 -translate-x-1/2 px-3 text-base shadow-lg"
+        style={{ left: selection.x, top: selection.y + 8 }}
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={askAssistance}
+      >
+        ✦ Assistència
+      </button>
+    )}
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-lg">
@@ -725,6 +778,19 @@ function Review({ student, report }: { student: Student; report: Report }) {
         del que s'envia.
       </ConfirmDialog>
     </div>
+    <aside className="self-start lg:sticky lg:top-6">
+      <ChatPanel
+        paragraphs={ordered.map((r) => ({ areaId: r.areaId, name: areaById.get(r.areaId)?.name ?? r.areaId, text: areaReportText(r) }))}
+        areaName={(id) => areaById.get(id)?.name ?? id}
+        quote={quote}
+        onClearQuote={() => setQuote(null)}
+        onApply={(areaId, paragraph) => updateArea(areaId, { editedText: paragraph, approved: false })}
+        display={display}
+        students={store.students}
+        inputRef={chatInput}
+      />
+    </aside>
+    </div>
   );
 }
 
@@ -769,7 +835,9 @@ function AreaReportCard({
     return (
       <section className="card p-5">
         {title}
-        <p className="mt-2 leading-relaxed text-muted">{display(areaReportText(report))}</p>
+        <p data-area-id={report.areaId} className="mt-2 leading-relaxed text-muted">
+          {display(areaReportText(report))}
+        </p>
         <button className="btn btn-ghost mt-2 -ml-3 text-base" onClick={() => onChange({ approved: false })}>
           Torna a obrir
         </button>
@@ -811,7 +879,7 @@ function AreaReportCard({
         </div>
       ) : (
         <>
-          <p className="mt-3 text-lg leading-relaxed">
+          <p data-area-id={report.areaId} className="mt-3 text-lg leading-relaxed">
             {report.editedText !== undefined
               ? display(report.editedText)
               : report.sentences.map((s, i) => {
@@ -834,7 +902,7 @@ function AreaReportCard({
 
           {report.editedText !== undefined && (
             <p className="mt-2 text-sm text-muted">
-              Text editat per tu. (A la versió real, el revisor el tornarà a comprovar.)
+              Text editat (per tu o amb l'assistent).
             </p>
           )}
 
@@ -881,10 +949,7 @@ function AreaReportCard({
             >
               Edita
             </button>
-            <span className={`ml-auto text-sm ${count < 6 || count > 8 ? "font-bold text-warn-ink" : "text-muted"}`}>
-              {plural(count, "frase", "frases")}
-              {(count < 6 || count > 8) && " (objectiu: 6-8)"}
-            </span>
+            <span className="ml-auto text-sm text-muted">{plural(count, "frase", "frases")}</span>
           </div>
         </>
       )}
