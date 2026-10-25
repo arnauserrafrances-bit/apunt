@@ -59,6 +59,18 @@ export function ChatPanel({
   const send = async () => {
     const message = text.trim();
     if (!message || busy || leaks > 0) return;
+    if (countNameLeaks([quote?.text ?? "", ...paragraphs.map((p) => p.text)].join("\n"), students) > 0) {
+      setMessages((m) => [
+        ...m,
+        {
+          id: nextId.current++,
+          role: "assistant",
+          text: "L'informe o el fragment marcat conté el nom d'un alumne. Canvia'l pel codi (A-01) abans de demanar ajuda.",
+          error: true,
+        },
+      ]);
+      return;
+    }
     const history: ChatTurn[] = messages.filter((m) => !m.error).map((m) => ({ role: m.role, text: m.text }));
     const userMsg: Message = { id: nextId.current++, role: "user", text: message, ...(quote ? { quote } : {}) };
     setMessages((m) => [...m, userMsg]);

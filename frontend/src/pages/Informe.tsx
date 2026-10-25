@@ -739,6 +739,10 @@ function Review({ student, report }: { student: Student; report: Report }) {
           report={r}
           display={display}
           onChange={(changes) => updateArea(r.areaId, changes)}
+          onAsk={(text) => {
+            setQuote({ areaId: r.areaId, text: toCodes(text) });
+            window.setTimeout(() => chatInput.current?.focus(), 0);
+          }}
         />
       ))}
 
@@ -806,14 +810,30 @@ function AreaReportCard({
   report,
   display,
   onChange,
+  onAsk,
 }: {
   area: Area;
   report: AreaReport;
   display: (t: string) => string;
   onChange: (changes: Partial<AreaReport>) => void;
+  /** Envia el fragment marcat al xat d'assistència. */
+  onAsk: (text: string) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
+  const [selected, setSelected] = useState("");
+  const editor = useRef<HTMLTextAreaElement>(null);
+
+  // Si l'assistent canvia aquest paràgraf mentre s'està editant, la caja mostra el text nou.
+  useEffect(() => {
+    if (editing && report.editedText !== undefined) setDraft(report.editedText);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [report.editedText]);
+
+  const readSelection = () => {
+    const el = editor.current;
+    setSelected(el ? el.value.slice(el.selectionStart, el.selectionEnd).trim() : "");
+  };
 
   const flags = report.editedText === undefined ? report.sentences.filter((s) => s.flag) : [];
   const count = countSentences(areaReportText(report));
@@ -855,17 +875,33 @@ function AreaReportCard({
       {editing ? (
         <div className="mt-3 space-y-3">
           <textarea
+            ref={editor}
             autoFocus
             rows={8}
             className="field resize-y leading-relaxed"
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
+            onSelect={readSelection}
+            onKeyUp={readSelection}
+            onMouseUp={readSelection}
             onKeyDown={(e) => e.key === "Escape" && setEditing(false)}
           />
           <p className="text-sm text-muted">
-            Escriu els alumnes amb el codi (p. ex. A-01); el nom es posarà en copiar l'informe.
+            Escriu els alumnes amb el codi (p. ex. A-01); el nom es posarà en copiar l'informe. Per demanar ajuda, marca
+            un tros del text i pulsa «Assistència».
           </p>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
+            <button
+              className="btn btn-secondary"
+              disabled={!selected}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => {
+                onChange({ editedText: draft.trim() });
+                onAsk(selected);
+              }}
+            >
+              ✦ Assistència
+            </button>
             <button
               className="btn btn-primary"
               onClick={() => {
