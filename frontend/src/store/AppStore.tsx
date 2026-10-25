@@ -42,7 +42,9 @@ function useStoreValue(repository: Repository, initial: AppState) {
       setTerm: (term: Term) => update(() => ({ currentTerm: term })),
 
       /** Substitueix totes les dades per la classe inventada. Només si la tutora ho demana. */
-      loadFakeData: () => setState(createFakeData()),
+      loadFakeData: () => setState((s) => ({ ...createFakeData(), reportGuide: s.reportGuide })),
+
+      setReportGuide: (text: string) => update(() => ({ reportGuide: text.trim() })),
 
       // ------------------------------------------------ Notes
       addNote: (n: Omit<Note, "id" | "createdAt">): Note => {

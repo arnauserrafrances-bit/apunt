@@ -12,6 +12,8 @@ export interface ReportRequest {
   code: string; // A-01
   term: string; // "1r trimestre"
   areas: AreaInput[];
+  /** Model d'informe de l'escola, enganxat per la tutora (opcional). */
+  guide?: string;
 }
 export interface ReportSentenceOut {
   text: string;
@@ -22,7 +24,10 @@ export interface ReportResponse {
 }
 
 const API_URL = "https://api.anthropic.com/v1/messages";
-const MAX_CHARS = 30_000;
+const MAX_CHARS = 40_000;
+const MAX_GUIDE_CHARS = 8_000;
+/** Id del paràgraf final de valoració (no és cap àrea de la tutora). */
+export const CLOSING_ID = "closing";
 
 const DRAFT_SYSTEM = `Ets l'assistent de redacció d'Apunt. Una tutora de primària de Catalunya t'envia les seves notes del trimestre sobre un alumne, identificat amb un codi (per exemple A-01). Has d'escriure el cos de l'informe d'avaluació que rebrà la família: un paràgraf per àrea.
 
@@ -51,8 +56,25 @@ Notes: «03/10: en A-07 fa bé les restes portant però s'equivoca en les divisi
 Paràgraf: «En l'àrea de matemàtiques, en A-07 resol amb seguretat les restes portant, tot i que encara comet errades en les divisions. Li costa explicar el procediment que ha seguit per resoldre un problema, de manera que cal continuar treballant l'expressió del raonament matemàtic. En geometria, reconeix correctament els angles treballats.»
 
 FORMAT DE LA RESPOSTA
-Respon NOMÉS amb un objecte JSON, sense cap text abans ni després. Cada paràgraf va partit en frases dins de "sentences", en ordre:
-{"areas":[{"areaId":"<id de l'àrea>","sentences":["frase 1","frase 2"]}]}`;
+Respon NOMÉS amb un objecte JSON, sense cap text abans ni després. Cada paràgraf va partit en frases dins de "sentences", en ordre. "closing" és un paràgraf final opcional (vegeu el model de l'escola, si n'hi ha); si no cal, deixa'l buit:
+{"areas":[{"areaId":"<id de l'àrea>","sentences":["frase 1","frase 2"]}],"closing":["frase 1"]}`;
+
+function guideSection(guide: string): string {
+  return `
+
+MODEL D'INFORME DE L'ESCOLA
+La tutora ha enganxat el model que fa servir la seva escola. Segueix-lo en tot el que depengui de tu: l'estructura, el to, la persona verbal (per exemple, escriure en plural) i el que cal destacar. Però les regles de «QUÈ POTS DIR» tenen prioritat sempre:
+- Si el model demana informació que no surt de les notes, no la inventis: simplement no l'escriguis.
+- Si el model parla de parts que escriuen altres mestres (per exemple anglès, pati o música) i no hi ha notes d'aquella àrea, no les escriguis.
+- No escriguis qualificacions numèriques ni noms de persones, encara que el model en parli.
+- No escriguis salutació, introducció ni comiat: ja els posa l'aplicació.
+- Si el model demana una part que no és cap àrea concreta (per exemple, un punt fort i un punt a millorar de l'infant), escriu-la a "closing", en 2-4 frases i només amb informació de les notes.
+
+Text del model (entre les etiquetes):
+<model>
+${guide}
+</model>`;
+}
 
 const CHECK_SYSTEM = `Ets el revisor d'Apunt. Reps les notes d'una tutora sobre un alumne i l'informe que n'ha redactat una IA. Per a cada frase de l'informe, comprova-la contra les notes de la mateixa àrea.
 
@@ -79,6 +101,8 @@ export function validateRequest(body: unknown): ReportRequest | string {
       return "Àrea no vàlida.";
     for (const n of a.notes) if (!n || typeof n.text !== "string" || typeof n.date !== "string") return "Nota no vàlida.";
   }
+  if (b.guide !== undefined && (typeof b.guide !== "string" || b.guide.length > MAX_GUIDE_CHARS))
+    return "El model d'informe és massa llarg.";
   if (JSON.stringify(b).length > MAX_CHARS) return "Hi ha massa text per a un sol informe.";
   return b as ReportRequest;
 }
@@ -99,10 +123,19 @@ export function extractJson(text: string): unknown {
   return JSON.parse(text.slice(start, end + 1));
 }
 
+/** Llista d'àrees de l'esborrany, amb el paràgraf final ("closing") com una àrea més si n'hi ha. */
+export function withClosing(draft: unknown): { areaId?: unknown; sentences?: unknown }[] {
+  const d = draft as { areas?: { areaId?: unknown; sentences?: unknown }[]; closing?: unknown };
+  const areas = Array.isArray(d?.areas) ? [...d.areas] : [];
+  if (Array.isArray(d?.closing) && d.closing.some((x) => typeof x === "string" && x.trim()))
+    areas.push({ areaId: CLOSING_ID, sentences: d.closing });
+  return areas;
+}
+
 /** Uneix l'esborrany i les marques del revisor. Només accepta àrees que s'han demanat. */
 export function mergeReport(req: ReportRequest, draft: unknown, check: unknown): ReportResponse {
-  const wanted = new Set(req.areas.map((a) => a.areaId));
-  const draftAreas = (draft as { areas?: { areaId?: unknown; sentences?: unknown }[] })?.areas ?? [];
+  const wanted = new Set([...req.areas.map((a) => a.areaId), CLOSING_ID]);
+  const draftAreas = withClosing(draft);
   const flags = (check as { flags?: { areaId?: unknown; index?: unknown; reason?: unknown }[] })?.flags ?? [];
   const areas: ReportResponse["areas"] = [];
   for (const a of draftAreas) {
@@ -139,9 +172,19 @@ export async function buildReport(req: ReportRequest, env: Record<string, string
   const checkModel = env.APUNT_CHECK_MODEL || "claude-haiku-5-5";
   const notes = notesBlock(req);
 
-  const draft = extractJson(await callClaude(apiKey, draftModel, DRAFT_SYSTEM, notes, 4000));
-  const draftForCheck = ((draft as ReportResponse).areas ?? [])
-    .map((a) => [`Àrea id: ${a.areaId}`, ...(a.sentences as unknown as string[]).map((s, i) => `${i}. ${s}`)].join("\n"))
+  const guide = req.guide?.trim();
+  const system = guide ? DRAFT_SYSTEM + guideSection(guide) : DRAFT_SYSTEM;
+  const draft = extractJson(await callClaude(apiKey, draftModel, system, notes, 4000));
+  const draftForCheck = withClosing(draft)
+    .filter((a) => Array.isArray(a.sentences))
+    .map((a) =>
+      [
+        a.areaId === CLOSING_ID
+          ? `Àrea id: ${CLOSING_ID} (valoració final: pot fer servir notes de qualsevol àrea)`
+          : `Àrea id: ${String(a.areaId)}`,
+        ...(a.sentences as unknown[]).map((s, i) => `${i}. ${String(s)}`),
+      ].join("\n"),
+    )
     .join("\n\n");
   const check = extractJson(
     await callClaude(apiKey, checkModel, CHECK_SYSTEM, `NOTES DE LA TUTORA\n${notes}\n\nINFORME\n${draftForCheck}`, 2000),

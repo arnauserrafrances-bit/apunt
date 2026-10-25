@@ -6,6 +6,7 @@ import Classe from "./pages/Classe";
 import Fitxa from "./pages/Fitxa";
 import { InformeAlumne, InformeIndex } from "./pages/Informe";
 import Mes from "./pages/Mes";
+import Model from "./pages/Model";
 import NotaRapida from "./pages/NotaRapida";
 
 export default function App() {
@@ -20,6 +21,7 @@ export default function App() {
         <Route path="/alumnes" element={<Alumnes />} />
         <Route path="/arees" element={<Arees />} />
         <Route path="/mes" element={<Mes />} />
+        <Route path="/model" element={<Model />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Layout>

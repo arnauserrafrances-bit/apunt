@@ -12,13 +12,14 @@ const NAV = [
   { to: "/informe", label: "Informe" },
   { to: "/alumnes", label: "Alumnes" },
   { to: "/arees", label: "Àrees" },
+  { to: "/model", label: "Model" },
 ];
 
 const MOBILE_NAV = [
   { to: "/", label: "Nota", match: ["/"] },
   { to: "/classe", label: "Classe", match: ["/classe", "/alumne"] },
   { to: "/informe", label: "Informe", match: ["/informe"] },
-  { to: "/mes", label: "Més", match: ["/mes", "/alumnes", "/arees"] },
+  { to: "/mes", label: "Més", match: ["/mes", "/alumnes", "/arees", "/model"] },
 ];
 
 /** Carrega la classe inventada. Només si la tutora ho demana; si ja hi ha dades, les substitueix. */

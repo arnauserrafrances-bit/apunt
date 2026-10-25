@@ -19,6 +19,12 @@ export default function Mes() {
             <div className="text-muted">Afegir, canviar el nom, ordenar i moure notes</div>
           </Link>
         </li>
+        <li>
+          <Link to="/model" className="block px-4 py-4 hover:bg-hover">
+            <div className="font-bold">Model d'informe</div>
+            <div className="text-muted">Les instruccions de l'escola que ha de seguir la IA</div>
+          </Link>
+        </li>
       </ul>
       <div className="mt-10">
         <LoadFakeDataButton />

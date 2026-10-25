@@ -6,7 +6,7 @@ import { StudentSearch } from "../components/StudentSearch";
 import { useToast } from "../components/Toast";
 import { TERMS } from "../config";
 import { areaReportText, fakeAreaReport } from "../data/fakeReport";
-import { loadAccessCode, requestAiReport, saveAccessCode } from "../lib/aiReport";
+import { CLOSING_ID, CLOSING_NAME, loadAccessCode, requestAiReport, saveAccessCode } from "../lib/aiReport";
 import { deanonymizeWithArticles, guessGenders } from "../lib/articles";
 import { buildLetter } from "../lib/letter";
 import {
@@ -205,6 +205,7 @@ function Preview({ student }: { student: Student }) {
             text: resolve(segments, decisions, students),
           })),
         })),
+        store.reportGuide,
       );
       store.saveReport({
         studentId: student.id,
@@ -299,6 +300,14 @@ function Preview({ student }: { student: Student }) {
         </p>
         <div className="card p-5 leading-relaxed whitespace-pre-wrap">
           <p className="text-muted">{INSTRUCTIONS}</p>
+          {useAi && store.reportGuide && (
+            <details className="mt-3 text-muted">
+              <summary className="cursor-pointer">
+                + El model d'informe de l'escola ({store.reportGuide.length.toLocaleString("ca")} caràcters)
+              </summary>
+              <p className="mt-2 text-sm">{store.reportGuide}</p>
+            </details>
+          )}
           <p className="mt-4">
             Alumne: <Code>{student.code}</Code>
             {"\n"}Trimestre: {TERMS[currentTerm]}
@@ -353,6 +362,14 @@ function Preview({ student }: { student: Student }) {
             ? "S'enviarà el text de dalt (només amb codis) a la IA real."
             : "Sense codi, l'informe és simulat i no s'envia res enlloc."}
         </p>
+        {useAi && (
+          <p className="text-sm text-muted">
+            {store.reportGuide ? "La IA seguirà el model d'informe de l'escola. " : "Encara no has afegit el model d'informe de l'escola. "}
+            <Link to="/model" className="underline">
+              {store.reportGuide ? "Revisa'l" : "Afegeix-lo"}
+            </Link>
+          </p>
+        )}
       </section>
 
       {aiError && (
@@ -476,9 +493,12 @@ function Review({ student, report }: { student: Student; report: Report }) {
   const [showNames, setShowNames] = useState(false);
   const [restart, setRestart] = useState(false);
 
-  const areaById = new Map(store.areas.map((a) => [a.id, a]));
-  const ordered = store.areas
-    .map((a) => report.areas.find((r) => r.areaId === a.id))
+  const areaById = new Map<Id, Area>([
+    ...store.areas.map((a) => [a.id, a] as const),
+    [CLOSING_ID, { id: CLOSING_ID, name: CLOSING_NAME }],
+  ]);
+  const ordered = [...store.areas.map((a) => a.id), CLOSING_ID]
+    .map((id) => report.areas.find((r) => r.areaId === id))
     .filter((r): r is AreaReport => !!r);
   const approved = ordered.filter((a) => a.approved).length;
   const allApproved = approved === ordered.length;

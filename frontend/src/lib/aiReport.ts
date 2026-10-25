@@ -10,6 +10,10 @@ export interface AiAreaInput {
 
 const CODE_KEY = "apunt-access-code";
 
+/** Id del paràgraf final de valoració que la IA escriu si el model de l'escola ho demana. */
+export const CLOSING_ID = "closing";
+export const CLOSING_NAME = "Valoració final";
+
 export function loadAccessCode(): string {
   try {
     return localStorage.getItem(CODE_KEY) ?? "";
@@ -32,13 +36,14 @@ export async function requestAiReport(
   code: string,
   term: string,
   areas: AiAreaInput[],
+  guide = "",
 ): Promise<AreaReport[]> {
   let r: Response;
   try {
     r = await fetch("/api/report", {
       method: "POST",
       headers: { "content-type": "application/json", "x-apunt-code": accessCode },
-      body: JSON.stringify({ code, term, areas }),
+      body: JSON.stringify({ code, term, areas, ...(guide.trim() ? { guide: guide.trim() } : {}) }),
     });
   } catch {
     throw new Error("No hi ha connexió amb el servidor.");

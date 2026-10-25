@@ -11,10 +11,12 @@ export interface AppState {
   currentTerm: Term;
   /** Comptador dels codis d'alumne (A-01, A-02...). No es reutilitzen mai. */
   nextStudentNumber: number;
+  /** Model d'informe de l'escola (text que enganxa la tutora). La IA el segueix. */
+  reportGuide: string;
 }
 
 export function emptyState(): AppState {
-  return { students: [], areas: [], notes: [], reports: {}, currentTerm: 1, nextStudentNumber: 1 };
+  return { students: [], areas: [], notes: [], reports: {}, currentTerm: 1, nextStudentNumber: 1, reportGuide: "" };
 }
 
 export interface Repository {
@@ -28,7 +30,7 @@ export class LocalStorageRepository implements Repository {
   async load(): Promise<AppState | null> {
     try {
       const raw = localStorage.getItem(this.key);
-      return raw ? (JSON.parse(raw) as AppState) : null;
+      return raw ? { ...emptyState(), ...(JSON.parse(raw) as Partial<AppState>) } : null;
     } catch {
       return null; // dades malmeses o navegador sense accés
     }

@@ -103,3 +103,50 @@ describe("handler", () => {
     expect(out.code).toBe(502);
   });
 });
+
+describe("model de l'escola i valoració final", () => {
+  it("rebutja un model massa llarg", () => expect(validateRequest({ ...req, guide: "x".repeat(9000) })).toBeTypeOf("string"));
+
+  it("envia el model a la redacció i afegeix la valoració final revisada", async () => {
+    vi.stubEnv("APUNT_ACCESS_CODE", "secret");
+    vi.stubEnv("ANTHROPIC_API_KEY", "sk-test");
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        claudeReply({
+          areas: [{ areaId: "mat", sentences: ["En l'àrea de matemàtiques, en A-01 fa bé les sumes portant."] }],
+          closing: ["Com a punt fort, destaquem el càlcul.", "Pensem que ha de llegir més."],
+        }),
+      )
+      .mockResolvedValueOnce(claudeReply({ flags: [{ areaId: "closing", index: 1, reason: "No surt de les notes." }] }));
+    vi.stubGlobal("fetch", fetchMock);
+    const { res, out } = fakeRes();
+    await handler({ method: "POST", headers: { "x-apunt-code": "secret" }, body: { ...req, guide: "Escriure en plural. Un punt fort i un a millorar." } }, res);
+    expect(out.code).toBe(200);
+    expect(out.body).toEqual({
+      areas: [
+        { areaId: "mat", sentences: [{ text: "En l'àrea de matemàtiques, en A-01 fa bé les sumes portant." }] },
+        { areaId: "closing", sentences: [{ text: "Com a punt fort, destaquem el càlcul." }, { text: "Pensem que ha de llegir més.", flag: "No surt de les notes." }] },
+      ],
+    });
+    const draftBody = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(draftBody.system).toContain("MODEL D'INFORME DE L'ESCOLA");
+    expect(draftBody.system).toContain("Escriure en plural. Un punt fort i un a millorar.");
+    expect(fetchMock.mock.calls[1][1].body).toContain("Àrea id: closing");
+  });
+
+  it("sense model, el prompt no inclou la secció del model", async () => {
+    vi.stubEnv("APUNT_ACCESS_CODE", "secret");
+    vi.stubEnv("ANTHROPIC_API_KEY", "sk-test");
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(claudeReply({ areas: [{ areaId: "mat", sentences: ["Frase."] }], closing: [] }))
+      .mockResolvedValueOnce(claudeReply({ flags: [] }));
+    vi.stubGlobal("fetch", fetchMock);
+    const { res, out } = fakeRes();
+    await handler({ method: "POST", headers: { "x-apunt-code": "secret" }, body: req }, res);
+    expect(out.code).toBe(200);
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body).system).not.toContain("MODEL D'INFORME DE L'ESCOLA");
+    expect((out.body as { areas: unknown[] }).areas).toHaveLength(1);
+  });
+});
