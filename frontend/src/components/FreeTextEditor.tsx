@@ -3,7 +3,7 @@ import { TERMS } from "../config";
 import { reportKey, useStore } from "../store/AppStore";
 import type { Student } from "../types";
 
-export const MAX_FREE_TEXT_CHARS = 6000;
+export const MAX_FREE_TEXT_CHARS = 8000;
 
 /**
  * Text lliure sobre un alumne: la tutora hi escriu tot el que vol explicar, en l'ordre que vol.

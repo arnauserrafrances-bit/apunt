@@ -42,7 +42,16 @@ function useStoreValue(repository: Repository, initial: AppState) {
       setTerm: (term: Term) => update(() => ({ currentTerm: term })),
 
       /** Substitueix totes les dades per la classe inventada. Només si la tutora ho demana. */
-      loadFakeData: () => setState((s) => ({ ...createFakeData(), reportGuide: s.reportGuide })),
+      loadFakeData: () =>
+        setState((s) => ({ ...createFakeData(), reportGuide: s.reportGuide, exampleReport: s.exampleReport })),
+
+      setExampleReport: (text: string) => update(() => ({ exampleReport: text.trim() })),
+
+      setAnswer: (studentId: Id, term: Term, questionId: string, text: string) =>
+        update((s) => {
+          const key = reportKey(studentId, term);
+          return { answers: { ...s.answers, [key]: { ...(s.answers[key] ?? {}), [questionId]: text } } };
+        }),
 
       setReportGuide: (text: string) => update(() => ({ reportGuide: text.trim() })),
 
@@ -100,6 +109,7 @@ function useStoreValue(repository: Repository, initial: AppState) {
             Object.entries(s.reports).filter(([, r]) => r.studentId !== id),
           ),
           freeTexts: Object.fromEntries(Object.entries(s.freeTexts).filter(([k]) => !k.startsWith(`${id}-`))),
+          answers: Object.fromEntries(Object.entries(s.answers).filter(([k]) => !k.startsWith(`${id}-`))),
         })),
 
       // ------------------------------------------------ Àrees

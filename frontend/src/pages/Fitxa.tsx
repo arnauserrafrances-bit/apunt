@@ -107,7 +107,7 @@ export default function Fitxa() {
           student={student}
           action={
             <Link to={`/informe/${student.code}`} className="btn btn-primary">
-              Classifica per àmbits i fes l'informe →
+              Continua amb el qüestionari i l'informe →
             </Link>
           }
         />

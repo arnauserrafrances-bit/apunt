@@ -2,6 +2,8 @@ import { Fragment, useMemo, useState, type ReactNode } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { FreeTextEditor } from "../components/FreeTextEditor";
+import { Questionnaire } from "../components/Questionnaire";
+import { ALL_QUESTIONS, QUESTIONNAIRE } from "../data/questionnaire";
 import { PageTitle } from "../components/Layout";
 import { StudentSearch } from "../components/StudentSearch";
 import { useToast } from "../components/Toast";
@@ -151,6 +153,17 @@ function Preview({ student }: { student: Student }) {
     [free, student.id, currentTerm],
   );
   const freeSegments = useMemo(() => (free.trim() ? analyze(free, students, "free:") : []), [free, students]);
+  const answers = store.answers[reportKey(student.id, currentTerm)];
+  const answerItems = useMemo(
+    () =>
+      ALL_QUESTIONS.filter((q) => answers?.[q.id]?.trim()).map((q) => {
+        const text = answers![q.id].trim();
+        const note: Note = { id: `q${q.id}`, studentId: student.id, areaId: q.blockId, text, date: todayIso(), term: currentTerm, createdAt: 0 };
+        return { q, note, segments: analyze(text, students, `q${q.id}:`) };
+      }),
+    [answers, student.id, currentTerm, students],
+  );
+  const hasQ = answerItems.length > 0;
   const [decisions, setDecisions] = useState<Record<string, Decision>>({});
   const [phase, setPhase] = useState<"idle" | "writing" | "reviewing">("idle");
   const [accessCode, setAccessCode] = useState(loadAccessCode);
@@ -174,6 +187,7 @@ function Preview({ student }: { student: Student }) {
   const allItems = [
     ...withNotes.flatMap((a) => a.items),
     ...(hasFree ? [{ note: freeNote, segments: freeSegments }] : []),
+    ...answerItems.map(({ note, segments }) => ({ note, segments })),
   ];
   const asks = allItems.flatMap(({ note, segments }) =>
     segments.flatMap((s) => (s.kind === "ask" ? [{ note, ask: s }] : [])),
@@ -191,6 +205,12 @@ function Preview({ student }: { student: Student }) {
       ...items.map(({ note, segments }) => `- ${formatDate(note.date)}: ${resolve(segments, decisions, students)}`),
     ]),
     ...(hasFree ? ["", "Text lliure de la tutora:", resolve(freeSegments, decisions, students)] : []),
+    ...QUESTIONNAIRE.flatMap((b) => {
+      const items = answerItems.filter((a) => a.q.blockId === b.id);
+      return items.length
+        ? ["", `Qüestionari · ${b.name}`, ...items.map((a) => `- ${a.q.text} → ${resolve(a.segments, decisions, students)}`)]
+        : [];
+    }),
   ].join("\n");
   const leaks = countNameLeaks(outgoing, students);
   const replaced =
@@ -205,11 +225,25 @@ function Preview({ student }: { student: Student }) {
     setPhase("writing");
     saveAccessCode(accessCode.trim());
     try {
+      const notesAsText = withNotes
+        .flatMap(({ area, items }) => items.map((i) => `- (${area.name}) ${resolve(i.segments, decisions, students)}`))
+        .join("\n");
       const aiAreas = await requestAiReport(
         accessCode.trim(),
         student.code,
         TERMS[currentTerm],
-        (hasFree ? byArea : withNotes).map(({ area, items }) => ({
+        hasQ
+          ? QUESTIONNAIRE.filter((b) => hasFree || notesAsText || answerItems.some((a) => a.q.blockId === b.id)).map((b) => ({
+              areaId: b.id,
+              areaName: b.name,
+              notes: answerItems
+                .filter((a) => a.q.blockId === b.id)
+                .map((a) => ({
+                  date: "",
+                  text: `Pregunta: ${a.q.section ? `(${a.q.section}) ` : ""}${a.q.text}\nResposta: ${resolve(a.segments, decisions, students)}`,
+                })),
+            }))
+          : (hasFree ? byArea : withNotes).map(({ area, items }) => ({
           areaId: area.id,
           areaName: area.name,
           notes: items.map(({ note, segments }) => ({
@@ -218,12 +252,15 @@ function Preview({ student }: { student: Student }) {
           })),
         })),
         store.reportGuide,
-        hasFree ? resolve(freeSegments, decisions, students) : "",
+        [hasFree ? resolve(freeSegments, decisions, students) : "", hasQ && notesAsText ? `Altres notes del trimestre:\n${notesAsText}` : ""]
+          .filter(Boolean)
+          .join("\n\n"),
+        store.exampleReport,
       );
       store.saveReport({
         studentId: student.id,
         term: currentTerm,
-        emptyAreaIds: areas.filter((a) => !aiAreas.some((r) => r.areaId === a.id)).map((a) => a.id),
+        emptyAreaIds: hasQ ? [] : areas.filter((a) => !aiAreas.some((r) => r.areaId === a.id)).map((a) => a.id),
         areas: aiAreas,
       });
     } catch (e) {
@@ -237,6 +274,24 @@ function Preview({ student }: { student: Student }) {
     window.setTimeout(() => setPhase("reviewing"), 1200);
     window.setTimeout(() => {
       // Simulat: el text lliure va tot a la primera àrea (la IA real el reparteix).
+      if (hasQ) {
+        const blocks = QUESTIONNAIRE.filter((b) => answerItems.some((a) => a.q.blockId === b.id));
+        store.saveReport({
+          studentId: student.id,
+          term: currentTerm,
+          emptyAreaIds: [],
+          areas: blocks.map((b, i) =>
+            fakeAreaReport(
+              b.id,
+              i + 1,
+              student.code,
+              answerItems.filter((a) => a.q.blockId === b.id).map((a) => resolve(a.segments, decisions, students)),
+              students.indexOf(student) + 1,
+            ),
+          ),
+        });
+        return;
+      }
       const sim = byArea
         .map(({ area, items }, i) => ({
           area,
@@ -258,12 +313,13 @@ function Preview({ student }: { student: Student }) {
     }, 2200);
   };
 
-  if (!withNotes.length && !hasFree) {
+  if (!withNotes.length && !hasFree && !hasQ) {
     return (
       <div className="space-y-6">
         <FreeTextEditor student={student} />
+        <Questionnaire student={student} />
         <div className="warn-box">
-          Escriu un text sobre {student.firstName} aquí dalt o{" "}
+          Escriu un petit text sobre {student.firstName}, respon algunes preguntes del qüestionari o{" "}
           <Link to={`/?alumne=${student.code}`} className="font-bold underline">
             afegeix notes
           </Link>{" "}
@@ -289,23 +345,8 @@ function Preview({ student }: { student: Student }) {
 
   return (
     <div className="space-y-6">
-      <FreeTextEditor
-        student={student}
-        compact
-        action={
-          <button className="btn btn-primary" disabled={pending > 0 || leaks > 0} onClick={generate}>
-            {useAi ? "Classifica per àmbits i genera l'informe" : "Genera un informe simulat"}
-          </button>
-        }
-      />
-      {hasFree && !useAi && (
-        <p className="-mt-3 text-sm text-warn-ink">
-          Per classificar el text per àmbits cal la IA: escriu el codi d'accés més avall.
-        </p>
-      )}
-      {hasFree && pending > 0 && (
-        <p className="-mt-3 text-sm text-warn-ink">Abans de generar, decideix les paraules marcades de sota.</p>
-      )}
+      <FreeTextEditor student={student} compact />
+      <Questionnaire student={student} />
 
       {asks.length > 0 && (
         <section className="space-y-3">
@@ -366,10 +407,31 @@ function Preview({ student }: { student: Student }) {
               <Segments segments={freeSegments} decisions={decisions} students={students} />
             </div>
           )}
+          {QUESTIONNAIRE.map((b) => {
+            const items = answerItems.filter((x) => x.q.blockId === b.id);
+            if (!items.length) return null;
+            return (
+              <div key={b.id} className="mt-4">
+                <div className="font-bold">Qüestionari · {b.name}</div>
+                {items.map(({ q, segments }) => (
+                  <div key={q.id}>
+                    - <span className="text-muted">{q.text}</span> →{" "}
+                    <Segments segments={segments} decisions={decisions} students={students} />
+                  </div>
+                ))}
+              </div>
+            );
+          })}
         </div>
       </section>
 
-      {hasFree ? (
+      {hasQ ? (
+        <div className="card p-4 text-muted">
+          {useAi
+            ? "La IA escriurà un paràgraf per a cada bloc del qüestionari que hagis respost, seguint el model de l'escola i l'informe d'exemple."
+            : "Informe simulat: les respostes es copien tal qual. Amb el codi d'accés, la IA redactarà l'informe."}
+        </div>
+      ) : hasFree ? (
         <div className="card p-4 text-muted">
           {useAi
             ? "La IA repartirà el text entre les àrees i escriurà un paràgraf per a cada àrea de què parli. Les àrees de què no hi hagi res quedaran buides."
@@ -547,9 +609,10 @@ function Review({ student, report }: { student: Student; report: Report }) {
 
   const areaById = new Map<Id, Area>([
     ...store.areas.map((a) => [a.id, a] as const),
+    ...QUESTIONNAIRE.map((b) => [b.id, { id: b.id, name: b.name }] as const),
     [CLOSING_ID, { id: CLOSING_ID, name: CLOSING_NAME }],
   ]);
-  const ordered = [...store.areas.map((a) => a.id), CLOSING_ID]
+  const ordered = [...store.areas.map((a) => a.id), ...QUESTIONNAIRE.map((b) => b.id), CLOSING_ID]
     .map((id) => report.areas.find((r) => r.areaId === id))
     .filter((r): r is AreaReport => !!r);
   const approved = ordered.filter((a) => a.approved).length;
@@ -595,6 +658,14 @@ function Review({ student, report }: { student: Student; report: Report }) {
             <input type="checkbox" className="h-5 w-5 accent-action" checked={showNames} onChange={(e) => setShowNames(e.target.checked)} />
             Mostra els noms
           </label>
+          {!allApproved && (
+            <button
+              className="btn btn-secondary text-base"
+              onClick={() => store.saveReport({ ...report, areas: report.areas.map((a) => ({ ...a, approved: true })) })}
+            >
+              Aprova-ho tot
+            </button>
+          )}
           <button className="btn btn-ghost text-base" onClick={() => setRestart(true)}>
             Torna a començar
           </button>

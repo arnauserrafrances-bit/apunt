@@ -38,6 +38,7 @@ export async function requestAiReport(
   areas: AiAreaInput[],
   guide = "",
   freeText = "",
+  exampleReport = "",
 ): Promise<AreaReport[]> {
   let r: Response;
   try {
@@ -50,6 +51,7 @@ export async function requestAiReport(
         areas,
         ...(guide.trim() ? { guide: guide.trim() } : {}),
         ...(freeText.trim() ? { freeText: freeText.trim() } : {}),
+        ...(exampleReport.trim() ? { exampleReport: exampleReport.trim() } : {}),
       }),
     });
   } catch {

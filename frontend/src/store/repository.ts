@@ -15,10 +15,14 @@ export interface AppState {
   reportGuide: string;
   /** Text lliure de la tutora sobre cada alumne i trimestre (clau: `${studentId}-${term}`). */
   freeTexts: Record<string, string>;
+  /** Respostes del qüestionari: clau `${studentId}-${term}` → id de pregunta → resposta. */
+  answers: Record<string, Record<string, string>>;
+  /** Un informe que agrada a la tutora (anonimitzat). La IA n'imita l'estil. */
+  exampleReport: string;
 }
 
 export function emptyState(): AppState {
-  return { students: [], areas: [], notes: [], reports: {}, currentTerm: 1, nextStudentNumber: 1, reportGuide: "", freeTexts: {} };
+  return { students: [], areas: [], notes: [], reports: {}, currentTerm: 1, nextStudentNumber: 1, reportGuide: "", freeTexts: {}, answers: {}, exampleReport: "" };
 }
 
 export interface Repository {

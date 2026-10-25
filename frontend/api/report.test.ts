@@ -34,7 +34,7 @@ describe("validateRequest", () => {
   it("rebutja àrees sense notes", () =>
     expect(validateRequest({ ...req, areas: [{ areaId: "x", areaName: "X", notes: [] }] })).toBeTypeOf("string"));
   it("rebutja massa text", () => {
-    const big = { ...req, areas: [{ ...req.areas[0], notes: [{ date: "d", text: "a".repeat(40_000) }] }] };
+    const big = { ...req, areas: [{ ...req.areas[0], notes: [{ date: "d", text: "a".repeat(70_000) }] }] };
     expect(validateRequest(big)).toBeTypeOf("string");
   });
 });
@@ -56,9 +56,9 @@ describe("helpers", () => {
     );
     expect(out.areas).toEqual([{ areaId: "mat", sentences: [{ text: "Frase 1." }, { text: "Frase 2.", flag: "No surt de les notes." }] }]);
   });
-  it("mergeReport talla a 8 frases", () => {
-    const out = mergeReport(req, { areas: [{ areaId: "mat", sentences: Array(12).fill("F.") }] }, { flags: [] });
-    expect(out.areas[0].sentences).toHaveLength(8);
+  it("mergeReport talla a 12 frases", () => {
+    const out = mergeReport(req, { areas: [{ areaId: "mat", sentences: Array(15).fill("F.") }] }, { flags: [] });
+    expect(out.areas[0].sentences).toHaveLength(12);
   });
 });
 
@@ -165,10 +165,51 @@ describe("text lliure", () => {
   it("sense text lliure, una àrea sense notes no és vàlida", () =>
     expect(validateRequest({ ...free, freeText: undefined })).toBeTypeOf("string"));
   it("rebutja un text lliure massa llarg", () =>
-    expect(validateRequest({ ...free, freeText: "x".repeat(7000) })).toBeTypeOf("string"));
+    expect(validateRequest({ ...free, freeText: "x".repeat(9000) })).toBeTypeOf("string"));
   it("el text lliure va al bloc que rep la IA", () => {
     const t = notesBlock(free);
     expect(t).toContain("Àrea: Àmbit lingüístic (id: ling)\n(sense notes)");
     expect(t).toContain("Text lliure de la tutora (reparteix-lo per àrees):\nLa A-01 llegeix amb fluïdesa.");
   });
+});
+
+describe("qüestionari i informe d'exemple", () => {
+  const q: ReportRequest = {
+    code: "A-01",
+    term: "1r trimestre",
+    areas: [{ areaId: "q-linguistic", areaName: "Àmbit lingüístic", notes: [{ date: "", text: "Pregunta: Llegeix amb fluïdesa?\nResposta: sí, però li costa l'entonació" }] }],
+    exampleReport: "Benvolguda família, … En l'àmbit lingüístic, l'*** comença a estructurar els textos…",
+  };
+  it("les respostes sense data surten sense prefix de data", () => {
+    expect(notesBlock(q)).toContain("- Pregunta: Llegeix amb fluïdesa?\nResposta: sí, però li costa l'entonació");
+  });
+  it("l'exemple va al prompt de redacció", async () => {
+    vi.stubEnv("APUNT_ACCESS_CODE", "secret");
+    vi.stubEnv("ANTHROPIC_API_KEY", "sk-test");
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(claudeReply({ areas: [{ areaId: "q-linguistic", sentences: ["Frase."] }] }))
+      .mockResolvedValueOnce(claudeReply({ flags: [] }));
+    vi.stubGlobal("fetch", fetchMock);
+    const { res, out } = fakeRes();
+    await handler({ method: "POST", headers: { "x-apunt-code": "secret" }, body: q }, res);
+    expect(out.code).toBe(200);
+    const system = JSON.parse(fetchMock.mock.calls[0][1].body).system as string;
+    expect(system).toContain("INFORME D'EXEMPLE");
+    expect(system).toContain("l'*** comença a estructurar els textos");
+    expect(system).toContain("CRITERIS DE LA TUTORA");
+  });
+  it("APUNT_SKIP_CHECK=1 salta el revisor", async () => {
+    vi.stubEnv("APUNT_ACCESS_CODE", "secret");
+    vi.stubEnv("ANTHROPIC_API_KEY", "sk-test");
+    vi.stubEnv("APUNT_SKIP_CHECK", "1");
+    const fetchMock = vi.fn().mockResolvedValueOnce(claudeReply({ areas: [{ areaId: "q-linguistic", sentences: ["Frase."] }] }));
+    vi.stubGlobal("fetch", fetchMock);
+    const { res, out } = fakeRes();
+    await handler({ method: "POST", headers: { "x-apunt-code": "secret" }, body: q }, res);
+    expect(out.code).toBe(200);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+  it("rebutja un exemple massa llarg", () =>
+    expect(validateRequest({ ...q, exampleReport: "x".repeat(9000) })).toBeTypeOf("string"));
 });

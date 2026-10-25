@@ -16,6 +16,8 @@ export interface ReportRequest {
   guide?: string;
   /** Text lliure de la tutora sobre l'alumne, ja anonimitzat. La IA el reparteix per àrees. */
   freeText?: string;
+  /** Un informe que agrada a la tutora (anonimitzat): la IA n'imita l'estil. */
+  exampleReport?: string;
 }
 export interface ReportSentenceOut {
   text: string;
@@ -26,9 +28,11 @@ export interface ReportResponse {
 }
 
 const API_URL = "https://api.anthropic.com/v1/messages";
-const MAX_CHARS = 40_000;
+const MAX_CHARS = 60_000;
 const MAX_GUIDE_CHARS = 8_000;
-const MAX_FREE_TEXT_CHARS = 6_000;
+const MAX_FREE_TEXT_CHARS = 8_000;
+const MAX_EXAMPLE_CHARS = 8_000;
+const MAX_SENTENCES = 12;
 /** Id del paràgraf final de valoració (no és cap àrea de la tutora). */
 export const CLOSING_ID = "closing";
 
@@ -36,10 +40,22 @@ const DRAFT_SYSTEM = `Ets l'assistent de redacció d'Apunt. Una tutora de primà
 
 QUÈ POTS DIR (regles sense excepció)
 1. Fes servir NOMÉS la informació de les notes. No inventis fets, no exageris, i no afegeixis consells, qualificacions ni comparacions amb altres alumnes que no surtin de les notes.
-2. Escriu només sobre les àrees que t'envio. Si una àrea té poca informació, escriu poques frases: és millor un paràgraf curt que inventar. Com a màxim 8 frases per àrea. Si d'una àrea no hi ha cap informació, no l'incloguis a la resposta.
+2. Escriu només sobre les àrees que t'envio. Si una àrea té poca informació, escriu poques frases: és millor un paràgraf curt que inventar. Com a màxim 12 frases per àrea. Si d'una àrea no hi ha cap informació, no l'incloguis a la resposta.
 2b. Si hi ha un «Text lliure de la tutora», reparteix-ne cada informació a l'àrea on correspon i escriu-la al paràgraf d'aquella àrea, juntament amb les notes de l'àrea si n'hi ha. Cada informació va a una sola àrea. Si alguna informació no encaixa a cap àrea, posa-la a "closing".
 3. No escriguis cap nom propi de persona. A l'alumne l'anomenes pel codi.
 4. No escriguis salutació, introducció ni comiat: l'aplicació ja afegeix «Benvolguda família,», el paràgraf d'introducció i el comiat.
+
+D'ON VE LA INFORMACIÓ
+- Les notes d'una àrea poden ser respostes a un qüestionari («Pregunta: … / Resposta: …»). La informació és la RESPOSTA; la pregunta només et diu de què parla. Si la resposta és curta o telegràfica (per exemple «sí», «a vegades», «li costa»), interpreta-la amb la pregunta i redacta-la bé, sense afegir res que no digui.
+- No cal que surtin totes les preguntes ni que segueixis el seu ordre: agrupa les idees de manera natural.
+
+CRITERIS DE LA TUTORA PER A CADA PARÀGRAF
+- Destaca els aprenentatges consolidats i les fortaleses de l'alumne.
+- Explica amb delicadesa les dificultats (tècnica sandvitx: el que va bé, el que cal millorar, i un missatge d'ànim o de confiança).
+- Acaba amb un objectiu de millora concret quan sigui necessari i surti de la informació.
+- A l'àmbit lingüístic, integra en un sol paràgraf l'expressió oral, l'expressió escrita, la lectura i la comprensió lectora, sense que sembli una enumeració.
+- Si l'àrea és de valoració final, comença amb una entrada com «Finalment, volem destacar…» i acaba amb les prioritats per al trimestre vinent.
+- Cada informe ha de ser diferent i reflectir el progrés real d'aquest alumne: evita frases fetes repetides.
 
 COM HO HAS D'ESCRIURE (l'estil de la tutora)
 - Català correcte, to proper i professional. Parles de l'alumne en tercera persona; quan parles de l'escola fas servir el plural («ens agradaria que…», «volem destacar…»).
@@ -62,6 +78,17 @@ Paràgraf: «En l'àrea de matemàtiques, en A-07 resol amb seguretat les restes
 FORMAT DE LA RESPOSTA
 Respon NOMÉS amb un objecte JSON, sense cap text abans ni després. Cada paràgraf va partit en frases dins de "sentences", en ordre. "closing" és un paràgraf final opcional (vegeu el model de l'escola, si n'hi ha); si no cal, deixa'l buit:
 {"areas":[{"areaId":"<id de l'àrea>","sentences":["frase 1","frase 2"]}],"closing":["frase 1"]}`;
+
+function exampleSection(example: string): string {
+  return `
+
+INFORME D'EXEMPLE (QUE A LA TUTORA LI AGRADA)
+La tutora ha enganxat un informe seu que li agrada. Imita'n l'estil: la manera d'encadenar les idees, el to, el vocabulari, els connectors, l'ordre dels temes i la llargada aproximada de cada paràgraf. NO en copiïs cap fet, cap frase concreta sobre l'alumne ni cap dada: la informació ha de sortir NOMÉS de les notes i respostes d'aquest alumne. No escriguis salutació, introducció ni comiat encara que l'exemple en tingui.
+
+<exemple>
+${example}
+</exemple>`;
+}
 
 function guideSection(guide: string): string {
   return `
@@ -109,6 +136,8 @@ export function validateRequest(body: unknown): ReportRequest | string {
   }
   if (b.freeText !== undefined && (typeof b.freeText !== "string" || b.freeText.length > MAX_FREE_TEXT_CHARS))
     return "El text lliure és massa llarg.";
+  if (b.exampleReport !== undefined && (typeof b.exampleReport !== "string" || b.exampleReport.length > MAX_EXAMPLE_CHARS))
+    return "L'informe d'exemple és massa llarg.";
   if (b.guide !== undefined && (typeof b.guide !== "string" || b.guide.length > MAX_GUIDE_CHARS))
     return "El model d'informe és massa llarg.";
   if (JSON.stringify(b).length > MAX_CHARS) return "Hi ha massa text per a un sol informe.";
@@ -122,7 +151,7 @@ export function notesBlock(req: ReportRequest): string {
     ...req.areas.flatMap((a) => [
       "",
       `Àrea: ${a.areaName} (id: ${a.areaId})`,
-      ...(a.notes.length ? a.notes.map((n) => `- ${n.date}: ${n.text}`) : ["(sense notes)"]),
+      ...(a.notes.length ? a.notes.map((n) => (n.date ? `- ${n.date}: ${n.text}` : `- ${n.text}`)) : ["(sense notes)"]),
     ]),
     ...(req.freeText?.trim() ? ["", "Text lliure de la tutora (reparteix-lo per àrees):", req.freeText.trim()] : []),
   ].join("\n");
@@ -155,7 +184,7 @@ export function mergeReport(req: ReportRequest, draft: unknown, check: unknown):
     if (typeof a?.areaId !== "string" || !wanted.has(a.areaId) || !Array.isArray(a.sentences)) continue;
     const sentences: ReportSentenceOut[] = a.sentences
       .filter((s): s is string => typeof s === "string" && s.trim().length > 0)
-      .slice(0, 8)
+      .slice(0, MAX_SENTENCES)
       .map((text) => ({ text: text.trim() }));
     for (const f of flags) {
       if (f?.areaId === a.areaId && typeof f.index === "number" && sentences[f.index] && typeof f.reason === "string")
@@ -186,8 +215,10 @@ export async function buildReport(req: ReportRequest, env: Record<string, string
   const notes = notesBlock(req);
 
   const guide = req.guide?.trim();
-  const system = guide ? DRAFT_SYSTEM + guideSection(guide) : DRAFT_SYSTEM;
-  const draft = extractJson(await callClaude(apiKey, draftModel, system, notes, 4000));
+  const example = req.exampleReport?.trim();
+  const system = DRAFT_SYSTEM + (guide ? guideSection(guide) : "") + (example ? exampleSection(example) : "");
+  const draft = extractJson(await callClaude(apiKey, draftModel, system, notes, 8000));
+  if (env.APUNT_SKIP_CHECK === "1") return mergeReport(req, draft, { flags: [] });
   const draftForCheck = withClosing(draft)
     .filter((a) => Array.isArray(a.sentences))
     .map((a) =>
