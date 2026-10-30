@@ -42,4 +42,33 @@ export interface Report {
   term: Term;
   areas: AreaReport[];
   emptyAreaIds: Id[];
+  /** Text original de la IA per àrea (per mesurar quant en conserva la tutora). */
+  draft?: Record<string, string>;
+  /** Mesures del learning loop. */
+  stats?: ReportStats;
+}
+
+export interface ReportStats {
+  generatedAt: number;
+  /** Quantes preferències de la tutora s'han fet servir en generar l'informe. */
+  prefsUsed: number;
+  /** Canvis de l'assistent que la tutora ha aplicat. */
+  chatEdits: number;
+  copiedAt?: number;
+  /** Part de l'esborrany que es conserva a la versió final (0-1), en copiar l'informe. */
+  keptRatio?: number | null;
+}
+
+/** Una fila del registre del learning loop: es desa en copiar un informe i no s'esborra amb l'informe. */
+export interface LearningEntry extends ReportStats {
+  studentId: Id;
+  term: Term;
+}
+
+/** Preferència d'estil que la tutora ha aprovat: la IA la seguirà als informes següents. */
+export interface Preference {
+  id: Id;
+  text: string;
+  createdAt: number;
+  source: "chat" | "manual";
 }

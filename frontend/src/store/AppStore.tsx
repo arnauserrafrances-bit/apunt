@@ -14,7 +14,7 @@ import { createFakeData } from "../data/fakeData";
 import { newId } from "../lib/id";
 import { formatCode, nameKey, parseNameList, type BulkParseResult } from "../lib/names";
 import { clean, plural } from "../lib/text";
-import type { Id, Note, Report, Student, Term } from "../types";
+import type { Id, LearningEntry, Note, Report, Student, Term } from "../types";
 import { emptyState, type AppState, type Repository } from "./repository";
 
 export const reportKey = (studentId: Id, term: Term) => `${studentId}-${term}`;
@@ -43,7 +43,34 @@ function useStoreValue(repository: Repository, initial: AppState) {
 
       /** Substitueix totes les dades per la classe inventada. Només si la tutora ho demana. */
       loadFakeData: () =>
-        setState((s) => ({ ...createFakeData(), reportGuide: s.reportGuide, exampleReport: s.exampleReport })),
+        setState((s) => ({
+          ...createFakeData(),
+          reportGuide: s.reportGuide,
+          exampleReport: s.exampleReport,
+          preferences: s.preferences,
+          learningEnabled: s.learningEnabled,
+          learningLog: s.learningLog,
+        })),
+
+      // ------------------------------------------------ Learning loop
+      addPreference: (text: string, source: "chat" | "manual") =>
+        update((s) => {
+          const t = text.trim();
+          if (!t || s.preferences.some((p) => p.text.toLowerCase() === t.toLowerCase())) return {};
+          return { preferences: [...s.preferences, { id: newId(), text: t, createdAt: Date.now(), source }] };
+        }),
+      updatePreference: (id: Id, text: string) =>
+        update((s) => ({ preferences: s.preferences.map((p) => (p.id === id ? { ...p, text: text.trim() } : p)) })),
+      removePreference: (id: Id) => update((s) => ({ preferences: s.preferences.filter((p) => p.id !== id) })),
+      setLearningEnabled: (on: boolean) => update(() => ({ learningEnabled: on })),
+      /** Desa (o actualitza, si es torna a copiar) la mesura d'un informe al registre. */
+      logLearning: (entry: LearningEntry) =>
+        update((s) => ({
+          learningLog: [
+            ...s.learningLog.filter((e) => !(e.generatedAt === entry.generatedAt && e.studentId === entry.studentId)),
+            entry,
+          ],
+        })),
 
       setExampleReport: (text: string) => update(() => ({ exampleReport: text.trim() })),
 

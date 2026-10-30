@@ -76,3 +76,23 @@ describe("xat d'assistència", () => {
     expect(out.body).toEqual({ reply: "Sinònims: evidencia, manifesta, demostra." });
   });
 });
+
+describe("learning loop al xat", () => {
+  it("retorna la preferència proposada", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(reply({ reply: "Fet.", preference: "Evitar repetir «mostra»" })));
+    const { res, out } = fakeRes();
+    await handler({ method: "POST", headers: { "x-apunt-code": "secret" }, body }, res);
+    expect(out.body).toEqual({ reply: "Fet.", preference: "Evitar repetir «mostra»" });
+  });
+  it("no la proposa si ja existeix o si l'aprenentatge està apagat", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(reply({ reply: "Fet.", preference: "Evitar repetir «mostra»" })));
+    for (const extra of [{ preferences: ["evitar repetir «mostra»"] }, { learning: false }]) {
+      const { res, out } = fakeRes();
+      await handler({ method: "POST", headers: { "x-apunt-code": "secret" }, body: { ...body, ...extra } }, res);
+      expect(out.body).toEqual({ reply: "Fet." });
+    }
+  });
+  it("les preferències aprovades van al prompt", () => {
+    expect(chatPrompt({ ...body, preferences: ["Escriure en positiu"] })).toContain("PREFERÈNCIES DE LA TUTORA (ja aprovades)\n- Escriure en positiu");
+  });
+});

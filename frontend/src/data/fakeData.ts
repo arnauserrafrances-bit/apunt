@@ -158,5 +158,8 @@ export function createFakeData(): AppState {
     freeTexts: {},
     answers: {},
     exampleReport: "",
+    preferences: [],
+    learningEnabled: true,
+    learningLog: [],
   };
 }

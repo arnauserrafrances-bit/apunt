@@ -68,13 +68,19 @@ export interface ChatRequest {
   paragraphs: ChatParagraph[];
   /** Missatges anteriors del xat, per mantenir la conversa. */
   history?: { role: "user" | "assistant"; text: string }[];
+  /** Preferències que la tutora ja ha aprovat. */
+  preferences?: string[];
+  /** Si és fals, no es proposen preferències noves. */
+  learning?: boolean;
 }
 export interface ChatResponse {
   reply: string;
   edits?: { areaId: string; paragraph: string }[];
+  /** Preferència general que la IA proposa recordar (la tutora decideix). */
+  preference?: string;
 }
 
-const LIMITS = { message: 1500, quote: 3000, paragraph: 8000, paragraphs: 20, history: 12, historyText: 3000 };
+const LIMITS = { message: 1500, quote: 3000, paragraph: 8000, paragraphs: 20, history: 12, historyText: 3000, prefs: 30, pref: 300 };
 
 const CHAT_SYSTEM = `Ets l'assistent d'edició d'Apunt. Una tutora de primària de Catalunya està revisant l'informe d'avaluació d'un alumne (identificat amb un codi com «la A-01» o «en A-01») i parla amb tu en un xat per millorar-lo.
 
@@ -87,6 +93,11 @@ Com respons:
 - Mantén els codis dels alumnes amb el seu article (la A-01, en A-01, l'A-01) exactament com són. No escriguis noms de persones.
 - Escriu en català correcte, amb el to de l'informe (proper, professional, en plural quan parla l'escola). Evita repetir paraules en frases properes. Redacta en positiu: les dificultats com a aspectes a millorar, mai amb frases negatives.
 - Respon sempre en català i de manera breu: la tutora vol anar ràpid.
+- Segueix les «PREFERÈNCIES DE LA TUTORA», si n'hi ha.
+
+Aprendre de la tutora:
+- Si la petició mostra una preferència GENERAL que valdria per als propers informes (to, estil, paraules o expressions a evitar o a fer servir, llargada, estructura), proposa-la a "preference" com una instrucció curta en català (màxim 20 paraules), per exemple «Evitar repetir "mostra" en frases properes» o «Escriure les dificultats sempre en positiu».
+- No proposis preferències sobre un alumne concret, que ja hi siguin, ni que trenquin les regles (inventar, posar noms o qualificacions). Si la petició és puntual, deixa "preference" buit.
 
 Dona la resposta fent servir l'eina chat_reply.`;
 
@@ -105,6 +116,7 @@ const CHAT_TOOL: Tool = {
           required: ["areaId", "paragraph"],
         },
       },
+      preference: { type: "string" },
     },
     required: ["reply"],
   },
@@ -120,6 +132,12 @@ export function validateChat(body: unknown): ChatRequest | string {
     if (!p || typeof p.areaId !== "string" || typeof p.name !== "string" || !str(p.text, LIMITS.paragraph)) return "Paràgraf no vàlid.";
   if (b.quote !== undefined && (!b.quote || typeof b.quote.areaId !== "string" || !str(b.quote.text, LIMITS.quote)))
     return "Fragment marcat no vàlid.";
+  if (
+    b.preferences !== undefined &&
+    (!Array.isArray(b.preferences) || b.preferences.length > LIMITS.prefs || b.preferences.some((p) => !str(p, LIMITS.pref)))
+  )
+    return "Preferències no vàlides.";
+  if (b.learning !== undefined && typeof b.learning !== "boolean") return "Paràmetre no vàlid.";
   if (b.history !== undefined) {
     if (!Array.isArray(b.history) || b.history.length > LIMITS.history) return "Conversa no vàlida.";
     for (const h of b.history)
@@ -131,7 +149,10 @@ export function validateChat(body: unknown): ChatRequest | string {
 export function chatPrompt(req: ChatRequest): string {
   const report = req.paragraphs.map((p) => `[areaId: ${p.areaId}] ${p.name}\n${p.text.trim()}`).join("\n\n");
   const history = (req.history ?? []).map((h) => `${h.role === "user" ? "Tutora" : "Assistent"}: ${h.text.trim()}`).join("\n");
+  const prefs = (req.preferences ?? []).map((p) => `- ${p.trim()}`).join("\n");
   return [
+    prefs ? `PREFERÈNCIES DE LA TUTORA (ja aprovades)\n${prefs}\n` : "",
+    req.learning === false ? "(L'aprenentatge està desactivat: no proposis cap preferència.)\n" : "",
     `INFORME ACTUAL\n${report}`,
     history ? `\nCONVERSA FINS ARA\n${history}` : "",
     req.quote ? `\nFRAGMENT MARCAT (a l'àrea ${req.quote.areaId})\n«${req.quote.text.trim()}»` : "",
@@ -151,7 +172,10 @@ export async function runChat(req: ChatRequest, env: Record<string, string | und
   ).map((e) => ({ areaId: e.areaId, paragraph: e.paragraph.trim() }));
   const reply = typeof out.reply === "string" ? out.reply.trim() : "";
   if (!reply && !edits.length) throw new Error("La IA no ha respost res.");
-  return { reply: reply || "Fet.", ...(edits.length ? { edits } : {}) };
+  const known_prefs = new Set((req.preferences ?? []).map((p) => p.trim().toLowerCase()));
+  const pref = typeof out.preference === "string" ? out.preference.trim().slice(0, 300) : "";
+  const preference = req.learning !== false && pref && !known_prefs.has(pref.toLowerCase()) ? pref : "";
+  return { reply: reply || "Fet.", ...(edits.length ? { edits } : {}), ...(preference ? { preference } : {}) };
 }
 
 interface Req {

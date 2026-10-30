@@ -15,6 +15,8 @@ interface Message {
   text: string;
   quote?: Quote;
   edits?: { areaId: string; paragraph: string; status: "pending" | "applied" | "discarded" }[];
+  /** Preferència que l'assistent proposa recordar per als propers informes. */
+  preference?: { text: string; status: "pending" | "saved" | "rejected" };
   error?: boolean;
 }
 
@@ -31,6 +33,9 @@ export function ChatPanel({
   display,
   students,
   inputRef,
+  preferences,
+  learningEnabled,
+  onRemember,
 }: {
   paragraphs: ChatParagraph[];
   areaName: (id: string) => string;
@@ -40,6 +45,11 @@ export function ChatPanel({
   display: (t: string) => string;
   students: Student[];
   inputRef: React.RefObject<HTMLTextAreaElement | null>;
+  /** Preferències ja aprovades (s'envien a l'assistent). */
+  preferences: string[];
+  learningEnabled: boolean;
+  /** La tutora aprova recordar una preferència (control humà del learning loop). */
+  onRemember: (text: string) => void;
 }) {
   const [accessCode, setAccessCode] = useState(loadAccessCode);
   const [codeDraft, setCodeDraft] = useState("");
@@ -78,7 +88,7 @@ export function ChatPanel({
     onClearQuote();
     setBusy(true);
     try {
-      const r = await requestAiChat(accessCode, message, paragraphs, quote, history);
+      const r = await requestAiChat(accessCode, message, paragraphs, quote, history, learningEnabled ? preferences : [], learningEnabled);
       setMessages((m) => [
         ...m,
         {
@@ -86,6 +96,9 @@ export function ChatPanel({
           role: "assistant",
           text: r.reply,
           edits: r.edits?.map((e) => ({ ...e, status: "pending" as const })),
+          ...(r.preference && learningEnabled && countNameLeaks(r.preference, students) === 0
+            ? { preference: { text: r.preference, status: "pending" as const } }
+            : {}),
         },
       ]);
     } catch (e) {
@@ -97,6 +110,9 @@ export function ChatPanel({
       setBusy(false);
     }
   };
+
+  const setPrefStatus = (msgId: number, status: "saved" | "rejected") =>
+    setMessages((ms) => ms.map((m) => (m.id === msgId && m.preference ? { ...m, preference: { ...m.preference, status } } : m)));
 
   const setEditStatus = (msgId: number, index: number, status: "applied" | "discarded") =>
     setMessages((ms) =>
@@ -183,6 +199,32 @@ export function ChatPanel({
                     )}
                   </div>
                 ))}
+                {m.preference && (
+                  <div className="mt-2 rounded-xl border border-line bg-card p-3">
+                    <div className="text-sm font-bold text-muted">Vols que ho recordi per als propers informes?</div>
+                    <p className="text-sm leading-relaxed">«{m.preference.text}»</p>
+                    {m.preference.status === "pending" ? (
+                      <div className="mt-2 flex gap-2">
+                        <button
+                          className="btn btn-primary min-h-9 px-3 text-base"
+                          onClick={() => {
+                            onRemember(m.preference!.text);
+                            setPrefStatus(m.id, "saved");
+                          }}
+                        >
+                          Recorda-ho
+                        </button>
+                        <button className="btn btn-secondary min-h-9 px-3 text-base" onClick={() => setPrefStatus(m.id, "rejected")}>
+                          No
+                        </button>
+                      </div>
+                    ) : (
+                      <p className="mt-2 text-sm font-bold text-muted">
+                        {m.preference.status === "saved" ? "✓ Desat a les teves preferències (pantalla Model)" : "No s'ha desat"}
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
             ))}
             {busy && <p className="text-sm text-muted">L'assistent està pensant…</p>}

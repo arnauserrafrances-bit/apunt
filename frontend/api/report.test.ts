@@ -277,3 +277,22 @@ describe("resposta sense format", () => {
     expect((out.body as { error: string }).error).toContain("No puc fer-ho");
   });
 });
+
+describe("preferències (learning loop)", () => {
+  it("les envia a la redacció i en valida la mida", async () => {
+    vi.stubEnv("APUNT_ACCESS_CODE", "secret");
+    vi.stubEnv("ANTHROPIC_API_KEY", "sk-test");
+    expect(validateRequest({ ...req, preferences: ["x".repeat(400)] })).toBeTypeOf("string");
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(claudeReply({ areas: [{ areaId: "mat", sentences: ["Frase."] }] }))
+      .mockResolvedValueOnce(claudeReply({ flags: [] }));
+    vi.stubGlobal("fetch", fetchMock);
+    const { res, out } = fakeRes();
+    await handler({ method: "POST", headers: { "x-apunt-code": "secret" }, body: { ...req, preferences: ["Escriure sempre en positiu"] } }, res);
+    expect(out.code).toBe(200);
+    const system = JSON.parse(fetchMock.mock.calls[0][1].body).system as string;
+    expect(system).toContain("PREFERÈNCIES DE LA TUTORA");
+    expect(system).toContain("- Escriure sempre en positiu");
+  });
+});

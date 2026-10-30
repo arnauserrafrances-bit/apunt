@@ -18,6 +18,8 @@ export interface ReportRequest {
   freeText?: string;
   /** Un informe que agrada a la tutora (anonimitzat): la IA n'imita l'estil. */
   exampleReport?: string;
+  /** Preferències d'estil que la tutora ha aprovat (learning loop). */
+  preferences?: string[];
 }
 export interface ReportSentenceOut {
   text: string;
@@ -33,6 +35,8 @@ const MAX_GUIDE_CHARS = 8_000;
 const MAX_FREE_TEXT_CHARS = 8_000;
 const MAX_EXAMPLE_CHARS = 8_000;
 const MAX_SENTENCES = 12;
+const MAX_PREFS = 30;
+const MAX_PREF_CHARS = 300;
 /** Id del paràgraf final de valoració (no és cap àrea de la tutora). */
 export const CLOSING_ID = "closing";
 
@@ -93,6 +97,14 @@ ${example}
 </exemple>`;
 }
 
+export function preferencesSection(prefs: string[]): string {
+  return `
+
+PREFERÈNCIES DE LA TUTORA (aprovades per ella)
+La tutora ha aprovat aquestes preferències d'estil a partir de les correccions que ha fet en altres informes. Segueix-les totes. Les regles de «QUÈ POTS DIR» tenen prioritat: si una preferència les contradiu (per exemple, inventar, posar noms o qualificacions), no la segueixis.
+${prefs.map((p) => `- ${p}`).join("\n")}`;
+}
+
 function guideSection(guide: string): string {
   return `
 
@@ -141,6 +153,13 @@ export function validateRequest(body: unknown): ReportRequest | string {
     return "El text lliure és massa llarg.";
   if (b.exampleReport !== undefined && (typeof b.exampleReport !== "string" || b.exampleReport.length > MAX_EXAMPLE_CHARS))
     return "L'informe d'exemple és massa llarg.";
+  if (
+    b.preferences !== undefined &&
+    (!Array.isArray(b.preferences) ||
+      b.preferences.length > MAX_PREFS ||
+      b.preferences.some((p) => typeof p !== "string" || !p.trim() || p.length > MAX_PREF_CHARS))
+  )
+    return "Preferències no vàlides.";
   if (b.guide !== undefined && (typeof b.guide !== "string" || b.guide.length > MAX_GUIDE_CHARS))
     return "El model d'informe és massa llarg.";
   if (JSON.stringify(b).length > MAX_CHARS) return "Hi ha massa text per a un sol informe.";
@@ -293,7 +312,12 @@ export async function buildReport(req: ReportRequest, env: Record<string, string
 
   const guide = req.guide?.trim();
   const example = req.exampleReport?.trim();
-  const system = DRAFT_SYSTEM + (guide ? guideSection(guide) : "") + (example ? exampleSection(example) : "");
+  const prefs = (req.preferences ?? []).map((p) => p.trim()).filter(Boolean);
+  const system =
+    DRAFT_SYSTEM +
+    (guide ? guideSection(guide) : "") +
+    (example ? exampleSection(example) : "") +
+    (prefs.length ? preferencesSection(prefs) : "");
   const draft = await callClaude(apiKey, draftModel, system, notes, 12000, REPORT_TOOL);
   if (env.APUNT_SKIP_CHECK === "1") return mergeReport(req, draft, { flags: [] });
   const draftForCheck = withClosing(draft)

@@ -13,6 +13,7 @@ import { TERMS } from "../config";
 import { areaReportText, fakeAreaReport } from "../data/fakeReport";
 import { CLOSING_ID, CLOSING_NAME, loadAccessCode, requestAiReport, saveAccessCode } from "../lib/aiReport";
 import { deanonymizeWithArticles, guessGenders } from "../lib/articles";
+import { keptRatio } from "../lib/learning";
 import { buildLetter } from "../lib/letter";
 import {
   analyze,
@@ -223,6 +224,7 @@ function Preview({ student }: { student: Student }) {
   const generate = () => (useAi ? generateWithAi() : generateSimulated());
 
   const generateWithAi = async () => {
+    const prefsUsed = store.learningEnabled ? store.preferences.map((p) => p.text) : [];
     setAiError(null);
     setPhase("writing");
     saveAccessCode(accessCode.trim());
@@ -258,12 +260,15 @@ function Preview({ student }: { student: Student }) {
           .filter(Boolean)
           .join("\n\n"),
         store.exampleReport,
+        prefsUsed,
       );
       store.saveReport({
         studentId: student.id,
         term: currentTerm,
         emptyAreaIds: hasQ ? [] : areas.filter((a) => !aiAreas.some((r) => r.areaId === a.id)).map((a) => a.id),
         areas: aiAreas,
+        draft: Object.fromEntries(aiAreas.map((a) => [a.areaId, areaReportText(a)])),
+        stats: { generatedAt: Date.now(), prefsUsed: prefsUsed.length, chatEdits: 0 },
       });
     } catch (e) {
       setAiError(e instanceof Error ? e.message : "Error desconegut.");
@@ -679,6 +684,16 @@ function Review({ student, report }: { student: Student; report: Report }) {
   ].join("\n");
 
   const copy = async () => {
+    if (report.draft) {
+      const finals = Object.fromEntries(ordered.map((r) => [r.areaId, areaReportText(r)]));
+      const stats = {
+        ...(report.stats ?? { generatedAt: Date.now(), prefsUsed: 0, chatEdits: 0 }),
+        copiedAt: Date.now(),
+        keptRatio: keptRatio(report.draft, finals),
+      };
+      store.saveReport({ ...report, stats });
+      store.logLearning({ ...stats, studentId: report.studentId, term: report.term });
+    }
     try {
       await navigator.clipboard.writeText(finalText);
       toast({ message: "Informe copiat amb els noms. Ja el pots enganxar." });
@@ -790,7 +805,16 @@ function Review({ student, report }: { student: Student; report: Report }) {
         areaName={(id) => areaById.get(id)?.name ?? id}
         quote={quote}
         onClearQuote={() => setQuote(null)}
-        onApply={(areaId, paragraph) => updateArea(areaId, { editedText: paragraph, approved: false })}
+        onApply={(areaId, paragraph) =>
+          store.saveReport({
+            ...report,
+            areas: report.areas.map((a) => (a.areaId === areaId ? { ...a, editedText: paragraph, approved: false } : a)),
+            ...(report.stats ? { stats: { ...report.stats, chatEdits: report.stats.chatEdits + 1 } } : {}),
+          })
+        }
+        preferences={store.preferences.map((p) => p.text)}
+        learningEnabled={store.learningEnabled}
+        onRemember={(text) => store.addPreference(text, "chat")}
         display={display}
         students={store.students}
         inputRef={chatInput}

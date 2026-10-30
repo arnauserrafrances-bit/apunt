@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { TERMS } from "../config";
+import { percent } from "../lib/learning";
 import { PageTitle } from "../components/Layout";
 import { useToast } from "../components/Toast";
 import { countNameLeaks } from "../lib/anonymize";
@@ -52,7 +54,165 @@ export default function Model() {
         onSave={(t) => store.setExampleReport(t)}
         savedMessage="Informe d'exemple desat."
       />
+
+      <Preferences />
+      <LearningStats />
     </div>
+  );
+}
+
+/** Learning loop: preferències que la tutora ha aprovat. Ella decideix què aprèn Apunt. */
+function Preferences() {
+  const store = useStore();
+  const toast = useToast();
+  const [draft, setDraft] = useState("");
+  const leaks = countNameLeaks(draft, store.students);
+
+  return (
+    <section className="space-y-3">
+      <h2 className="text-2xl font-bold">3. Les meves preferències</h2>
+      <p className="text-muted">
+        Quan corregeixes un informe amb l'assistent, et proposa recordar la preferència (per exemple «escriure sempre en
+        positiu»). Només es desa si tu dius «Recorda-ho». La IA les seguirà a tots els informes nous. Les pots canviar o
+        esborrar quan vulguis.
+      </p>
+
+      <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-lg border border-line bg-card px-4">
+        <input
+          type="checkbox"
+          className="h-5 w-5 accent-action"
+          checked={store.learningEnabled}
+          onChange={(e) => store.setLearningEnabled(e.target.checked)}
+        />
+        <span>
+          <strong>Apunt aprèn de les meves correccions</strong>
+          <span className="block text-sm text-muted">
+            Si ho desactives, l'assistent no proposa preferències noves i les desades no s'envien a la IA.
+          </span>
+        </span>
+      </label>
+
+      {store.preferences.length ? (
+        <ul className="divide-y divide-line rounded-xl border border-line bg-card">
+          {store.preferences.map((p) => (
+            <PreferenceRow key={p.id} id={p.id} text={p.text} source={p.source} createdAt={p.createdAt} />
+          ))}
+        </ul>
+      ) : (
+        <p className="rounded-xl border border-dashed border-line p-4 text-muted">Encara no hi ha cap preferència desada.</p>
+      )}
+
+      <div className="flex flex-wrap gap-2">
+        <input
+          className="field min-w-0 flex-1"
+          placeholder="Afegeix-ne una a mà, p. ex.: No fer servir la paraula «adequat»"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+        />
+        <button
+          className="btn btn-secondary"
+          disabled={!draft.trim() || draft.length > 300 || leaks > 0}
+          onClick={() => {
+            store.addPreference(draft, "manual");
+            setDraft("");
+            toast({ message: "Preferència desada." });
+          }}
+        >
+          Afegeix
+        </button>
+      </div>
+      {leaks > 0 && <p className="text-sm text-warn-ink">No hi posis noms d'alumnes.</p>}
+    </section>
+  );
+}
+
+function PreferenceRow({ id, text, source, createdAt }: { id: string; text: string; source: "chat" | "manual"; createdAt: number }) {
+  const store = useStore();
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(text);
+  return (
+    <li className="flex flex-wrap items-center gap-3 px-4 py-3">
+      {editing ? (
+        <input className="field min-w-0 flex-1" value={value} onChange={(e) => setValue(e.target.value)} />
+      ) : (
+        <span className="min-w-0 flex-1">
+          {text}
+          <span className="block text-sm text-muted">
+            {source === "chat" ? "Après de l'assistent" : "Afegida a mà"} · {new Date(createdAt).toLocaleDateString("ca")}
+          </span>
+        </span>
+      )}
+      {editing ? (
+        <button
+          className="btn btn-primary min-h-9 px-3 text-base"
+          disabled={!value.trim() || value.length > 300}
+          onClick={() => {
+            store.updatePreference(id, value);
+            setEditing(false);
+          }}
+        >
+          Desa
+        </button>
+      ) : (
+        <button className="btn btn-ghost min-h-9 text-base" onClick={() => setEditing(true)}>
+          Canvia
+        </button>
+      )}
+      <button className="btn btn-ghost min-h-9 text-base text-danger" onClick={() => store.removePreference(id)}>
+        Esborra
+      </button>
+    </li>
+  );
+}
+
+/** Mesures del learning loop: si Apunt aprèn, cada informe necessita menys correccions. */
+function LearningStats() {
+  const store = useStore();
+  const rows = [...store.learningLog].sort((a, b) => a.generatedAt - b.generatedAt);
+  const code = (id: string) => store.students.find((s) => s.id === id)?.code ?? "—";
+
+  return (
+    <section className="space-y-3">
+      <h2 className="text-2xl font-bold">Com està aprenent Apunt</h2>
+      <p className="text-muted">
+        Per a cada informe: quina part del text de la IA has conservat, i quantes correccions has fet amb l'assistent. Si
+        Apunt aprèn de tu, el primer número ha de pujar i el segon ha de baixar.
+      </p>
+      {rows.length ? (
+        <div className="overflow-x-auto rounded-xl border border-line bg-card">
+          <table className="w-full text-left text-base">
+            <thead className="border-b border-line text-sm text-muted">
+              <tr>
+                <th className="px-4 py-2">#</th>
+                <th className="px-4 py-2">Alumne</th>
+                <th className="px-4 py-2">Generat</th>
+                <th className="px-4 py-2">Preferències</th>
+                <th className="px-4 py-2">Text conservat</th>
+                <th className="px-4 py-2">Correccions amb l'assistent</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-line">
+              {rows.map((r, i) => (
+                <tr key={`${r.studentId}-${r.generatedAt}`}>
+                  <td className="px-4 py-2 text-muted">{i + 1}</td>
+                  <td className="px-4 py-2">
+                    {code(r.studentId)} · {TERMS[r.term]}
+                  </td>
+                  <td className="px-4 py-2">{new Date(r.generatedAt).toLocaleDateString("ca")}</td>
+                  <td className="px-4 py-2">{r.prefsUsed}</td>
+                  <td className="px-4 py-2 font-bold">{percent(r.keptRatio)}</td>
+                  <td className="px-4 py-2">{r.chatEdits}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <p className="rounded-xl border border-dashed border-line p-4 text-muted">
+          Encara no hi ha dades. Apareixeran quan generis un informe amb la IA i el copiïs.
+        </p>
+      )}
+    </section>
   );
 }
 

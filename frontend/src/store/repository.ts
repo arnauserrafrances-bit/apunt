@@ -1,7 +1,7 @@
 // On es guarden les dades. L'AppStore només parla amb aquesta interfície: ara és localStorage
 // i a la fase 4 serà IndexedDB xifrat + Supabase, sense canviar les pantalles.
 import { STORAGE_KEY } from "../config";
-import type { Note, Report, Student, Area, Term } from "../types";
+import type { LearningEntry, Note, Preference, Report, Student, Area, Term } from "../types";
 
 export interface AppState {
   students: Student[];
@@ -19,10 +19,16 @@ export interface AppState {
   answers: Record<string, Record<string, string>>;
   /** Un informe que agrada a la tutora (anonimitzat). La IA n'imita l'estil. */
   exampleReport: string;
+  /** Preferències aprovades per la tutora (learning loop). */
+  preferences: Preference[];
+  /** Si és fals, Apunt no proposa ni fa servir preferències. */
+  learningEnabled: boolean;
+  /** Registre de mesures (un per informe copiat). */
+  learningLog: LearningEntry[];
 }
 
 export function emptyState(): AppState {
-  return { students: [], areas: [], notes: [], reports: {}, currentTerm: 1, nextStudentNumber: 1, reportGuide: "", freeTexts: {}, answers: {}, exampleReport: "" };
+  return { students: [], areas: [], notes: [], reports: {}, currentTerm: 1, nextStudentNumber: 1, reportGuide: "", freeTexts: {}, answers: {}, exampleReport: "", preferences: [], learningEnabled: true, learningLog: [] };
 }
 
 export interface Repository {
