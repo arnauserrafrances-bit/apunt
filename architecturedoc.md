@@ -6,6 +6,7 @@ Apunt (working name). A tool for primary tutors in Catalonia to write term repor
 ## Architectural principles
 - Real student names never go to the AI. Each student has a code (A-01, A-02…). Names are replaced on the device before anything is sent, and put back at the very end.
 - The AI never invents. Every sentence must come from the teacher's notes. If an area has no notes, nothing is written and the teacher is told.
+- Red lines are checked by a fixed rule, not only by the AI (Session 8): before a report reaches the tutor, any sentence with a number grade, a comparison with other students or an academic decision (repeating the year) is deleted, whatever the notes, the school model or the example report say.
 - When the app is not sure, it asks; it never guesses. Example: "Pau" can be a name or the word for "peace", so the teacher decides.
 - Writing a note takes less than 10 seconds and can be done with the keyboard only (voice notes from the phone are planned).
 - The teacher always has the last word: she reads, edits and approves every area before copying the report.
@@ -18,7 +19,7 @@ Apunt (working name). A tool for primary tutors in Catalonia to write term repor
 - Local storage: today localStorage with fake data (prototype); next, encrypted IndexedDB behind the same `Repository` interface, so the screens do not change.
 - Encryption: libsodium (`libsodium-wrappers-sumo`) + WebCrypto only — Argon2id for the password, XChaCha20-Poly1305 for the data, BLAKE2b for salts. Built and tested (`lib/crypto.ts`, `lib/backup.ts`). Details in `security-note.md`.
 - AI (live): Anthropic API in two Vercel server functions (`api/report.ts`, `api/edit.ts`) that only receive anonymised text and need an access code. Claude Sonnet writes the draft and answers the assistant chat; Claude Haiku checks every sentence against the tutor's answers. Models are set by environment variables; the API key lives only in Vercel, never in the frontend.
-- Tests: vitest, 96 tests (encryption, backups, names and Catalan articles, AI functions with a simulated API, learning metrics). Server functions are also tested the way Vercel runs them (Node ESM).
+- Tests: vitest, 99 tests (encryption, backups, names and Catalan articles, AI functions with a simulated API, learning metrics, red-line guardrail), plus a 15-case eval run on the live app (see "Workflow and evals"). Server functions are also tested the way Vercel runs them (Node ESM).
 - Python + SQLite (`core/`, `tests/`): the first data layer. No longer used, because the server cannot read the data; it will be deleted in phase 9.
 
 ## Dependencies to avoid
@@ -47,6 +48,21 @@ Next, in this order (riskiest first):
 2. Voice notes from the phone during the term: the feature the tutor wants most, and the one that would make her pay. Test it with her for two weeks: does she really record notes, and does the report take less time?
 3. Test with more tutors (her school's staff), using the school's standard model per course and term.
 4. Only after that: accounts and encrypted sync (store ready to sync is half done) → phone app (PWA) → password recovery → clean-up.
+
+## Workflow and evals (Session 8)
+Workflow for one report:
+1. Tutor input — questionnaire, free text or notes (human).
+2. Names → codes — on her computer; asks her when a word can be a name; she sees exactly what is sent (fixed rule + human).
+3. AI draft — Claude Sonnet, one paragraph per area in the school's style (AI).
+4. AI checker — Claude Haiku flags every sentence that does not come from the notes (AI).
+5. Names back + letter — Catalan articles, greeting, intro, farewell (fixed rule).
+6. Tutor review — approve/edit, chat assistant (human + AI).
+
+Eval: 15 cases (10 normal, 5 attacks: direct injection, indirect injection in the example report, out of scope, red line, data exposure), invented class, real school model, run on the live app; the output of every step is read. Sheet: `apunt_session8_error_analysis.xlsx`.
+- Before: 0/10 normal reports could be approved as they came, 5/5 attacks handled safely. The AI draft invented sentences in all 14 reports (49 sentences: encouragement, predictions, the school's feelings); the checker caught 44. Name replacement: 0 errors. Cause: the draft prompt contradicted itself (it asked for "a message of encouragement" and "never add advice").
+- Fix (draft step only): encouragement, advice and predictions only if the tutor wrote them; examples of forbidden additions; "check every sentence before answering". Guardrail: fixed red-line check on the output (above).
+- After: 5/10 normal OK, 5/5 attacks safe; invented sentences 49 → 4, all flagged by the checker.
+- Found by the eval, next fix (step 5): when the draft cannot tell the gender it writes «l'A-02», and the letter then says «Pau» / «Marta» with no article. The letter step should take the article from the class list. Also: the checker sometimes flags words that come from the question itself («cada matí»); and in the rerun of the «pau» case the second name question did not clear in my automated run, so the generate button stayed blocked (safe, but it must be checked by hand).
 
 ## Learning loop (Session 7)
 - Behaviour: the corrections the tutor asks for in the assistant chat and applies (her main complaint: "it doesn't learn my changes as fast as ChatGPT").
@@ -79,3 +95,4 @@ Next, in this order (riskiest first):
 - Session 6 (13 Oct, in class): moved the prototype to React and built the encryption and backup module (commits 44edec4 and 045ca51).
 - Session 6 follow-up (24–25 Oct), after the professor's feedback to test the riskiest guess first: connected the real AI and ran a test with a real tutor (my mother, 5th grade) on 3 real students, with names replaced by codes on her computer. What we learned changed the product: she does not take notes during the term, she answers a questionnaire, so Apunt now has her questionnaire; she wanted help while editing, so Apunt now has an assistant chat (select text → «Assistència» → apply). Result: about 28 minutes per student versus about 45 with ChatGPT; review exactly 15 minutes. Her corrections: repeated words and ideas, negative sentences; both are now rules in the prompt. Commitment: she will use Apunt for her 25 students this term and show it to the whole staff; she would pay, above all if it has voice notes during the term, which is now step 2 of the plan. Weak point she named: it does not learn her preferences as fast as ChatGPT, which becomes the Session 7 learning loop.
 - Session 7 (27 Oct – 1 Nov): from the Session 6 test, chose the behaviour for the learning loop (her chat corrections) and built it: tutor-approved preferences, a switch to stop learning, and learning metrics (share of the draft kept, chat corrections per report). Tested end to end in the browser and as Vercel runs the functions; 96 automated tests. Fixed a design problem found in testing: metrics were stored inside each report and were lost on "start again", so they now live in a separate learning log. Competitor map: strongest competitor is ChatGPT (the tutor's previous tool); our advantage is trust (names never reach the AI). Next: real numbers from the tutor's next reports, then voice notes.
+- Session 8 (2–8 Nov): mapped the product as a 6-step workflow and ran a 15-case eval (10 normal + 5 attacks) on the live app, reading every step. The AI draft was the step that failed most (invented sentences in every report, caused by a contradiction in our own prompt), not the name replacement we trusted least (0 errors). Fixed only the draft prompt and added a fixed red-line output check; reran the same 15 cases: normal reports OK 0 → 5 of 10, invented sentences 49 → 4, attacks 5/5 safe before and after. The rerun showed one thing that got worse (missing article when the draft writes the neutral «l'A-0x»), which is the next fix.
