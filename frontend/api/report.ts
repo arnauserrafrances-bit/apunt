@@ -55,14 +55,16 @@ D'ON VE LA INFORMACIÓ
 
 CRITERIS DE LA TUTORA PER A CADA PARÀGRAF
 - Destaca els aprenentatges consolidats i les fortaleses de l'alumne.
-- Explica amb delicadesa les dificultats (tècnica sandvitx: el que va bé, el que cal millorar, i un missatge d'ànim o de confiança).
-- Acaba amb un objectiu de millora concret quan sigui necessari i surti de la informació.
+- Explica amb delicadesa les dificultats: primer el que va bé i després el que encara li costa, amb paraules suaus («encara li costa», «està treballant», «necessita reforç per»).
+- Un missatge d'ànim, un consell, un objectiu de millora o una previsió («l'animem a…», «és important que…», «cal continuar treballant…», «ho aconseguirà», «podrà avançar…») NOMÉS si la tutora ho diu a les notes. Si no ho diu, no l'afegeixis: acaba el paràgraf amb l'últim fet de les notes.
+- No afegeixis valoracions o emocions de l'escola que no surtin de les notes («ens alegra», «ens va agradar especialment», «estem contents», «estem convençuts»), ni conclusions generals («això reflecteix una bona relació amb el grup»), ni intensifiquis el que diu la nota (si diu «es distreu», no escriguis «es distreu amb facilitat»).
 - A l'àmbit lingüístic, integra en un sol paràgraf l'expressió oral, l'expressió escrita, la lectura i la comprensió lectora, sense que sembli una enumeració.
-- Si l'àrea és de valoració final, comença amb una entrada com «Finalment, volem destacar…» i acaba amb les prioritats per al trimestre vinent.
+- Si l'àrea és de valoració final, comença amb una entrada com «Finalment, volem destacar…» i resumeix el que surt de les notes; les prioritats per al trimestre vinent només si la tutora les escriu.
 - Cada informe ha de ser diferent i reflectir el progrés real d'aquest alumne: evita frases fetes repetides.
 - NO repeteixis la mateixa paraula en frases properes (per exemple «mostra», «necessita», «treballa», «actitud»): fes servir sinònims o reformula la frase perquè el text soni natural.
 - NO repeteixis la mateixa idea en dos paràgrafs diferents: cada informació apareix una sola vegada, a l'àrea on encaixa millor.
-- Redacta SEMPRE en positiu: és un informe de valoració per a la família. Les dificultats es presenten com a aspectes a millorar o objectius («cal continuar treballant…», «l'animem a…», «és important que…»), mai com a frases negatives («no sap…», «no fa…», «és incapaç de…»).
+- Redacta SEMPRE en positiu: és un informe de valoració per a la família. Les dificultats es presenten com a aspectes que encara s'estan treballant («encara li costa…», «està aprenent a…»), mai com a frases negatives («no sap…», «no fa…», «és incapaç de…»).
+- Abans de donar la resposta, repassa cada frase: si no pots assenyalar la nota o la resposta d'on surt, esborra-la. Un paràgraf curt i fidel és millor que un de llarg amb afegits.
 
 COM HO HAS D'ESCRIURE (l'estil de la tutora)
 - Català correcte, to proper i professional. Parles de l'alumne en tercera persona; quan parles de l'escola fas servir el plural («ens agradaria que…», «volem destacar…»).
@@ -70,7 +72,7 @@ COM HO HAS D'ESCRIURE (l'estil de la tutora)
 - Si l'àrea és d'actitud, hàbits, adaptació o convivència, no cal l'entrada: comença directament per l'alumne («La A-01 s'ha adaptat bé al curs…») o per «En la convivència amb els companys i companyes, …».
 - Equilibra: primer el que fa bé i després el que ha de reforçar, lligat amb connectors com «tot i que», «però», «així i tot», «encara», «de manera que», «per la qual cosa».
 - Sigues concret: digues exactament què fa o què li costa (la competència o el contingut de la nota), no elogis genèrics.
-- Fes servir expressions matisades com: «mostra», «comença a», «ha millorat», «necessita reforç per», «necessita acompanyament en», «cal continuar treballant», «és important que», «amb ajuda», «de manera autònoma».
+- Fes servir expressions matisades com: «mostra», «comença a», «ha millorat», «necessita reforç per», «necessita acompanyament en», «encara li costa», «amb ajuda», «de manera autònoma».
 - Llenguatge inclusiu: «els companys i companyes», «el professorat».
 
 COM ANOMENAR L'ALUMNE (important per als articles)
@@ -80,7 +82,7 @@ COM ANOMENAR L'ALUMNE (important per als articles)
 
 EXEMPLE (inventat) d'una àrea
 Notes: «03/10: en A-07 fa bé les restes portant però s'equivoca en les divisions. 17/10: li costa explicar com ha resolt un problema. 30/10: geometria, reconeix bé els angles.»
-Paràgraf: «En l'àrea de matemàtiques, en A-07 resol amb seguretat les restes portant, tot i que encara comet errades en les divisions. Li costa explicar el procediment que ha seguit per resoldre un problema, de manera que cal continuar treballant l'expressió del raonament matemàtic. En geometria, reconeix correctament els angles treballats.»
+Paràgraf: «En l'àrea de matemàtiques, en A-07 resol amb seguretat les restes portant, tot i que encara comet errades en les divisions. Encara li costa explicar el procediment que ha seguit per resoldre un problema. En geometria, reconeix correctament els angles treballats.»
 
 FORMAT DE LA RESPOSTA
 Dona la resposta fent servir l'eina write_report. Cada paràgraf va partit en frases dins de "sentences", en ordre. "closing" és un paràgraf final opcional (vegeu el model de l'escola, si n'hi ha); si no cal, deixa'l buit. L'estructura és:
@@ -197,6 +199,21 @@ export function withClosing(draft: unknown): { areaId?: unknown; sentences?: unk
 }
 
 /** Uneix l'esborrany i les marques del revisor. Només accepta àrees que s'han demanat. */
+// Guardrail de línies vermelles (regla fixa, no IA): aquestes frases no poden arribar mai a la família,
+// encara que les notes, el model o l'exemple ho demanin. S'esborren abans de tornar l'informe.
+const RED_LINES: { re: RegExp; why: string }[] = [
+  { re: /\b(un|una|el|la|amb un|amb una)\s+(\d{1,2}([.,]\d)?)(\s*\/\s*10)?\b/i, why: "qualificació numèrica" },
+  { re: /\b\d{1,2}([.,]\d)?\s*\/\s*10\b/, why: "qualificació numèrica" },
+  { re: /\b(millor|pitjor|pitjors)\s+(alumne|alumna|alumnes|de la classe|del grup)\b/i, why: "comparació amb altres alumnes" },
+  { re: /\b(que|com)\s+(els altres|les altres|la resta)\b/i, why: "comparació amb altres alumnes" },
+  { re: /\b(repeti(r|teixi|teix|ció)|repeteixi)\b[^.]{0,20}\bcurs\b/i, why: "decisió acadèmica (repetir curs)" },
+];
+
+export function redLine(text: string): string | null {
+  for (const r of RED_LINES) if (r.re.test(text)) return r.why;
+  return null;
+}
+
 export function mergeReport(req: ReportRequest, draft: unknown, check: unknown): ReportResponse {
   const wanted = new Set([...req.areas.map((a) => a.areaId), CLOSING_ID]);
   const draftAreas = withClosing(draft);
@@ -212,9 +229,13 @@ export function mergeReport(req: ReportRequest, draft: unknown, check: unknown):
       if (f?.areaId === a.areaId && typeof f.index === "number" && sentences[f.index] && typeof f.reason === "string")
         sentences[f.index].flag = f.reason.slice(0, 200);
     }
-    if (sentences.length) areas.push({ areaId: a.areaId, sentences });
+    const safe = sentences.filter((x) => redLine(x.text) === null);
+    if (safe.length) areas.push({ areaId: a.areaId, sentences: safe });
   }
-  if (!areas.length) throw new Error("La IA no ha escrit cap àrea.");
+  if (!areas.length)
+    throw new Error(
+      "No s'ha pogut escriure cap àrea amb la informació de les notes. Revisa que hi hagi observacions sobre l'alumne (les instruccions per a la IA, com posar notes o comparar alumnes, no es poden seguir).",
+    );
   return { areas };
 }
 

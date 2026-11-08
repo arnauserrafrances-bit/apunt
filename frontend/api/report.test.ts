@@ -83,14 +83,15 @@ describe("handler", () => {
     vi.stubEnv("ANTHROPIC_API_KEY", "sk-test");
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(claudeReply({ areas: [{ areaId: "mat", sentences: ["L'A-01 fa bé les sumes portant.", "És el millor de la classe."] }] }))
-      .mockResolvedValueOnce(claudeReply({ flags: [{ areaId: "mat", index: 1, reason: "Compara amb altres alumnes." }] }));
+      .mockResolvedValueOnce(claudeReply({ areas: [{ areaId: "mat", sentences: ["L'A-01 fa bé les sumes portant.", "Ho fa amb molta seguretat.", "És el millor de la classe."] }] }))
+      .mockResolvedValueOnce(claudeReply({ flags: [{ areaId: "mat", index: 1, reason: "Afegeix seguretat." }, { areaId: "mat", index: 2, reason: "Compara amb altres alumnes." }] }));
     vi.stubGlobal("fetch", fetchMock);
     const { res, out } = fakeRes();
     await handler({ method: "POST", headers: { "x-apunt-code": "secret" }, body: req }, res);
     expect(out.code).toBe(200);
     expect(out.body).toEqual({
-      areas: [{ areaId: "mat", sentences: [{ text: "L'A-01 fa bé les sumes portant." }, { text: "És el millor de la classe.", flag: "Compara amb altres alumnes." }] }],
+      // La frase 1 la marca el revisor; la 2 (comparació) l'esborra el guardrail de línies vermelles.
+      areas: [{ areaId: "mat", sentences: [{ text: "L'A-01 fa bé les sumes portant." }, { text: "Ho fa amb molta seguretat.", flag: "Afegeix seguretat." }] }],
     });
     // La clau només va a l'API d'Anthropic, i el que s'envia són les notes amb codis.
     const [url, init] = fetchMock.mock.calls[0];
