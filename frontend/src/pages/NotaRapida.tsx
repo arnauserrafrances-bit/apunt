@@ -4,6 +4,7 @@ import { AreaPicker } from "../components/AreaPicker";
 import { LoadFakeDataButton, PageTitle } from "../components/Layout";
 import { StudentSearch } from "../components/StudentSearch";
 import { useToast } from "../components/Toast";
+import { VoiceNote } from "../components/VoiceNote";
 import { TERMS } from "../config";
 import { shortAreaName } from "../lib/areas";
 import { fullName } from "../lib/names";
@@ -37,6 +38,8 @@ export default function NotaRapida() {
     const candidate = fromUrl || readLastArea();
     return areas.some((a) => a.id === candidate) ? candidate : null;
   });
+  // Pantalla inicial: nota de veu (gran) o nota manual. Si s'hi entra amb un alumne o àrea a l'URL, directament manual.
+  const [mode, setMode] = useState<"home" | "manual">(() => (params.get("alumne") || params.get("area") ? "manual" : "home"));
   const [text, setText] = useState("");
   const [date, setDate] = useState(todayIso());
   const [editingDate, setEditingDate] = useState(false);
@@ -170,114 +173,138 @@ export default function NotaRapida() {
     <div className="mx-auto max-w-2xl">
       <PageTitle title="Nota ràpida" />
 
-      <form
-        className="space-y-6"
-        onSubmit={(e) => {
-          e.preventDefault();
-          save();
-        }}
-      >
-        <section>
-          <label className="mb-2 block font-bold">1. Alumne</label>
-          <StudentSearch
-            ref={studentRef}
-            students={students}
-            value={student}
-            onChange={(s) => {
-              setStudentId(s?.id ?? null);
-              setHint(null);
-              setFocus(s ? (areaId ? "text" : "area") : "student");
-            }}
-          />
-        </section>
-
-        <section>
-          <div className="mb-2 flex items-baseline justify-between">
-            <label className="font-bold">2. Àrea</label>
-            <span className="hidden text-sm text-muted sm:inline">
-              Tecles <span className="kbd">1</span>–<span className="kbd">{Math.min(9, areas.length)}</span>
-            </span>
-          </div>
-          <AreaPicker
-            ref={areaRef}
-            areas={areas}
-            value={areaId}
-            onChange={(id) => {
-              setAreaId(id);
-              setHint(null);
-              setFocus("text");
-            }}
-            onEscape={() => {
-              setStudentId(null);
-              setFocus("student");
-            }}
-          />
-        </section>
-
-        <section>
-          <label htmlFor="nota" className="mb-2 block font-bold">
-            3. Nota
-          </label>
-          <textarea
-            id="nota"
-            ref={textRef}
-            rows={4}
-            className="field resize-y text-lg leading-relaxed"
-            placeholder={
-              student && area
-                ? `Què has observat de ${student.firstName} a ${shortAreaName(area.name)}?`
-                : "Què has observat?"
-            }
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
-                e.preventDefault();
-                save();
-              } else if (e.key === "Escape") {
-                e.preventDefault();
-                setFocus("area");
-              }
-            }}
-          />
-        </section>
-
-        <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
-          <button type="submit" className="btn btn-primary px-8 text-lg">
-            Desa
-          </button>
-          <div className="text-muted">
-            Es desarà al <strong className="text-ink">{TERMS[currentTerm]}</strong>
-            {" · "}
-            {editingDate ? (
-              <input
-                type="date"
-                autoFocus
-                className="field inline-block min-h-9 w-auto py-1"
-                value={date}
-                onChange={(e) => setDate(e.target.value || todayIso())}
-                onBlur={() => setEditingDate(false)}
-              />
-            ) : (
+      {mode === "home" ? (
+        <VoiceNote
+          below={
+            <section className="flex justify-center">
               <button
                 type="button"
-                className="underline underline-offset-4 hover:text-ink"
-                onClick={() => setEditingDate(true)}
+                className="btn btn-secondary w-full max-w-md gap-3 py-3 text-lg"
+                onClick={() => {
+                  setMode("manual");
+                  setFocus(studentId ? (areaId ? "text" : "area") : "student");
+                }}
               >
-                {date === todayIso() ? "avui" : formatDate(date)}
+                <span aria-hidden="true">✎</span> Crea una nota manualment
               </button>
-            )}
-          </div>
-          {hint && <div className="warn-box py-2">{hint}</div>}
-        </div>
+            </section>
+          }
+        />
+      ) : (
+        <>
+          <button type="button" className="btn btn-ghost -ml-3 mb-4" onClick={() => setMode("home")}>
+            ← Nota de veu o manual
+          </button>
+        <form
+          className="space-y-6"
+          onSubmit={(e) => {
+            e.preventDefault();
+            save();
+          }}
+        >
+          <section>
+            <label className="mb-2 block font-bold">1. Alumne</label>
+            <StudentSearch
+              ref={studentRef}
+              students={students}
+              value={student}
+              onChange={(s) => {
+                setStudentId(s?.id ?? null);
+                setHint(null);
+                setFocus(s ? (areaId ? "text" : "area") : "student");
+              }}
+            />
+          </section>
 
-        <p className="hidden text-sm text-muted md:block">
-          <span className="kbd">Enter</span> desa · <span className="kbd">Shift</span>+
-          <span className="kbd">Enter</span> nova línia · <span className="kbd">Esc</span> torna enrere ·{" "}
-          <span className="kbd">/</span> cerca alumne · <span className="kbd">Alt</span>+
-          <span className="kbd">1</span>… canvia l'àrea
-        </p>
-      </form>
+          <section>
+            <div className="mb-2 flex items-baseline justify-between">
+              <label className="font-bold">2. Àrea</label>
+              <span className="hidden text-sm text-muted sm:inline">
+                Tecles <span className="kbd">1</span>–<span className="kbd">{Math.min(9, areas.length)}</span>
+              </span>
+            </div>
+            <AreaPicker
+              ref={areaRef}
+              areas={areas}
+              value={areaId}
+              onChange={(id) => {
+                setAreaId(id);
+                setHint(null);
+                setFocus("text");
+              }}
+              onEscape={() => {
+                setStudentId(null);
+                setFocus("student");
+              }}
+            />
+          </section>
+
+          <section>
+            <label htmlFor="nota" className="mb-2 block font-bold">
+              3. Nota
+            </label>
+            <textarea
+              id="nota"
+              ref={textRef}
+              rows={4}
+              className="field resize-y text-lg leading-relaxed"
+              placeholder={
+                student && area
+                  ? `Què has observat de ${student.firstName} a ${shortAreaName(area.name)}?`
+                  : "Què has observat?"
+              }
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                  e.preventDefault();
+                  save();
+                } else if (e.key === "Escape") {
+                  e.preventDefault();
+                  setFocus("area");
+                }
+              }}
+            />
+          </section>
+
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
+            <button type="submit" className="btn btn-primary px-8 text-lg">
+              Desa
+            </button>
+            <div className="text-muted">
+              Es desarà al <strong className="text-ink">{TERMS[currentTerm]}</strong>
+              {" · "}
+              {editingDate ? (
+                <input
+                  type="date"
+                  autoFocus
+                  className="field inline-block min-h-9 w-auto py-1"
+                  value={date}
+                  onChange={(e) => setDate(e.target.value || todayIso())}
+                  onBlur={() => setEditingDate(false)}
+                />
+              ) : (
+                <button
+                  type="button"
+                  className="underline underline-offset-4 hover:text-ink"
+                  onClick={() => setEditingDate(true)}
+                >
+                  {date === todayIso() ? "avui" : formatDate(date)}
+                </button>
+              )}
+            </div>
+            {hint && <div className="warn-box py-2">{hint}</div>}
+          </div>
+
+          <p className="hidden text-sm text-muted md:block">
+            <span className="kbd">Enter</span> desa · <span className="kbd">Shift</span>+
+            <span className="kbd">Enter</span> nova línia · <span className="kbd">Esc</span> torna enrere ·{" "}
+            <span className="kbd">/</span> cerca alumne · <span className="kbd">Alt</span>+
+            <span className="kbd">1</span>… canvia l'àrea
+          </p>
+        </form>
+        </>
+      )}
 
       {recent.length > 0 && (
         <section className="mt-12">

@@ -8,7 +8,7 @@ Apunt (working name). A tool for primary tutors in Catalonia to write term repor
 - The AI never invents. Every sentence must come from the teacher's notes. If an area has no notes, nothing is written and the teacher is told.
 - Red lines are checked by a fixed rule, not only by the AI (Session 8): before a report reaches the tutor, any sentence with a number grade, a comparison with other students or an academic decision (repeating the year) is deleted, whatever the notes, the school model or the example report say.
 - When the app is not sure, it asks; it never guesses. Example: "Pau" can be a name or the word for "peace", so the teacher decides.
-- Writing a note takes less than 10 seconds and can be done with the keyboard only (voice notes from the phone are planned).
+- Writing a note takes less than 10 seconds: by voice (say the student's name and what you saw; Apunt finds the student and splits the note by area) or with the keyboard only.
 - The teacher always has the last word: she reads, edits and approves every area before copying the report.
 - End-to-end encryption: students, areas, notes and reports are encrypted on the device before upload. The password and the encryption keys never leave the device.
 - Offline first: every change is saved on the device first and uploaded later, so a note is never lost because of a bad connection.
@@ -18,9 +18,11 @@ Apunt (working name). A tool for primary tutors in Catalonia to write term repor
 - Accounts and data: Supabase free plan, EU region (planned, phases 3–4). Email + password login, Postgres with Row Level Security on every table. Supabase only receives encrypted records.
 - Local storage: today localStorage with fake data (prototype); next, encrypted IndexedDB behind the same `Repository` interface, so the screens do not change.
 - Encryption: libsodium (`libsodium-wrappers-sumo`) + WebCrypto only — Argon2id for the password, XChaCha20-Poly1305 for the data, BLAKE2b for salts. Built and tested (`lib/crypto.ts`, `lib/backup.ts`). Details in `security-note.md`.
-- AI (live): Anthropic API in two Vercel server functions (`api/report.ts`, `api/edit.ts`) that only receive anonymised text and need an access code. Claude Sonnet writes the draft and answers the assistant chat; Claude Haiku checks every sentence against the tutor's answers. Models are set by environment variables; the API key lives only in Vercel, never in the frontend.
+- AI (live): Anthropic API in three Vercel server functions (`api/report.ts`, `api/edit.ts`, `api/classify.ts`) that only receive anonymised text and need an access code. Claude Sonnet writes the draft and answers the assistant chat; Claude Haiku checks every sentence against the tutor's answers. For voice notes, Claude Sonnet splits the dictated text into one note per area (`api/classify.ts`). Models are set by environment variables; the API key lives only in Vercel, never in the frontend.
 - Tests: vitest, 99 tests (encryption, backups, names and Catalan articles, AI functions with a simulated API, learning metrics, red-line guardrail), plus a 15-case eval run on the live app (see "Workflow and evals"). Server functions are also tested the way Vercel runs them (Node ESM).
 - Python + SQLite (`core/`, `tests/`): the first data layer. No longer used, because the server cannot read the data; it will be deleted in phase 9.
+
+- Voice to text: the browser's speech recognition (Web Speech API, Chrome and Safari, computer and phone), wrapped in `lib/speech.ts` so it can be swapped for the phone's native on-device recognition when Apunt becomes a downloadable app (Capacitor). No audio is stored.
 
 ## Dependencies to avoid
 - Streamlit: tried in step 1 and dropped. It decides the look for us and makes a keyboard-first flow hard.
@@ -38,6 +40,7 @@ Apunt (working name). A tool for primary tutors in Catalonia to write term repor
 - The name check only knows the names in the class list. It cannot catch nicknames, siblings or parents unless the teacher adds them. We cover the gap by showing the teacher the exact text before anything is sent.
 - Catalan only, one teacher, one class. We gain: we build for the real user we have, not for an imagined school.
 - The final report is plain text to copy and paste; no Word or PDF export.
+- Voice notes use the browser's dictation for now: the audio (with the student's name) is turned into text by Google (Chrome) or Apple (Safari), not by Apunt's AI. After that, the name is replaced by the code on the device and only the code goes to Claude. We gain: it works today on computer and phone, in Catalan, for free. In the downloadable app it will move to the phone's on-device recognition, so the audio never leaves the phone.
 - Data lives only in the tutor's browser (no accounts or sync yet): if she changes computer or clears the browser, she loses it. We gain: no server holds children's data while we test whether the AI reports are good enough.
 
 ## Plan
@@ -45,7 +48,7 @@ Done: clickable prototype; name replacement with correct Catalan articles; encry
 
 Next, in this order (riskiest first):
 1. (Built in Session 7) Learn the tutor's preferences from her chat corrections, with her approval: see "Learning loop" below. Next: collect real numbers from her next reports.
-2. Voice notes from the phone during the term: the feature the tutor wants most, and the one that would make her pay. Test it with her for two weeks: does she really record notes, and does the report take less time?
+2. (Built in Session 9) Voice notes: big microphone in «Nota ràpida»; the tutor says the student's name and what she saw; Apunt finds the student, replaces names with codes, the AI splits the note by area, and she reviews before saving. Next: test it with her for two weeks on her phone: does she really record notes, and does the report take less time?
 3. Test with more tutors (her school's staff), using the school's standard model per course and term.
 4. Only after that: accounts and encrypted sync (store ready to sync is half done) → phone app (PWA) → password recovery → clean-up.
 

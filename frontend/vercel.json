@@ -5,6 +5,9 @@
     },
     "api/edit.ts": {
       "maxDuration": 60
+    },
+    "api/classify.ts": {
+      "maxDuration": 60
     }
   },
   "rewrites": [
