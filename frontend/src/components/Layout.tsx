@@ -2,6 +2,7 @@ import { useState, type ReactNode } from "react";
 import { NavLink, useLocation } from "react-router";
 import { APP_NAME } from "../config";
 import { useStore } from "../store/AppStore";
+import { useSync } from "../store/SyncProvider";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { TermSwitcher } from "./TermSwitcher";
 import { useToast } from "./Toast";
@@ -19,7 +20,7 @@ const MOBILE_NAV = [
   { to: "/", label: "Nota", match: ["/"] },
   { to: "/classe", label: "Classe", match: ["/classe", "/alumne"] },
   { to: "/informe", label: "Informe", match: ["/informe"] },
-  { to: "/mes", label: "Més", match: ["/mes", "/alumnes", "/arees", "/model"] },
+  { to: "/mes", label: "Més", match: ["/mes", "/alumnes", "/arees", "/model", "/compte"] },
 ];
 
 /** Carrega la classe inventada. Només si la tutora ho demana; si ja hi ha dades, les substitueix. */
@@ -52,6 +53,26 @@ export function LoadFakeDataButton() {
   );
 }
 
+const DOT: Record<string, string> = { ok: "bg-green-600", syncing: "bg-amber-400", offline: "bg-amber-500", error: "bg-danger", locked: "bg-amber-500", choose: "bg-amber-500" };
+
+/** Enllaç al compte amb l'estat de la sincronització. */
+function AccountLink() {
+  const sync = useSync();
+  const label =
+    sync.status === "off" || sync.status === "signedOut" || sync.status === "loading"
+      ? "Entra o crea un compte"
+      : { ok: "Sincronitzat", syncing: "Sincronitzant…", offline: "Sense connexió", error: "Error de sincronització", locked: "Cal la contrasenya", choose: "Cal decidir què fer" }[sync.status];
+  return (
+    <NavLink to="/compte" className="block rounded-lg border border-line bg-card px-3 py-2 hover:bg-hover">
+      <div className="font-bold">Compte</div>
+      <div className="flex items-center gap-2 text-sm text-muted">
+        {DOT[sync.status] && <span className={`h-2 w-2 rounded-full ${DOT[sync.status]}`} />}
+        <span className="truncate">{label}</span>
+      </div>
+    </NavLink>
+  );
+}
+
 export function Layout({ children }: { children: ReactNode }) {
   const { pathname } = useLocation();
   const linkClass = ({ isActive }: { isActive: boolean }) =>
@@ -72,7 +93,8 @@ export function Layout({ children }: { children: ReactNode }) {
             </NavLink>
           ))}
         </nav>
-        <div className="mt-auto">
+        <div className="mt-auto space-y-4">
+          <AccountLink />
           <LoadFakeDataButton />
         </div>
       </aside>

@@ -3,6 +3,7 @@ import { Layout } from "./components/Layout";
 import Alumnes from "./pages/Alumnes";
 import Arees from "./pages/Arees";
 import Classe from "./pages/Classe";
+import Compte from "./pages/Compte";
 import Fitxa from "./pages/Fitxa";
 import { InformeAlumne, InformeIndex } from "./pages/Informe";
 import Mes from "./pages/Mes";
@@ -22,6 +23,7 @@ export default function App() {
         <Route path="/arees" element={<Arees />} />
         <Route path="/mes" element={<Mes />} />
         <Route path="/model" element={<Model />} />
+        <Route path="/compte" element={<Compte />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Layout>

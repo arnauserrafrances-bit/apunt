@@ -4,6 +4,7 @@ import { BrowserRouter } from "react-router";
 import App from "./App";
 import { APP_NAME } from "./config";
 import { StoreProvider } from "./store/AppStore";
+import { SyncProvider } from "./store/SyncProvider";
 import { LocalStorageRepository } from "./store/repository";
 import { ToastProvider } from "./components/Toast";
 import { ErrorBoundary } from "./components/ErrorBoundary";
@@ -17,11 +18,13 @@ createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <BrowserRouter>
       <StoreProvider repository={repository}>
-        <ToastProvider>
-          <ErrorBoundary>
-            <App />
-          </ErrorBoundary>
-        </ToastProvider>
+        <SyncProvider>
+          <ToastProvider>
+            <ErrorBoundary>
+              <App />
+            </ErrorBoundary>
+          </ToastProvider>
+        </SyncProvider>
       </StoreProvider>
     </BrowserRouter>
   </StrictMode>,

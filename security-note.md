@@ -16,16 +16,16 @@ Only standard primitives from libsodium and WebCrypto; no home-made cryptography
 - **Data key.** All records are encrypted with a random `dataKey` using XChaCha20-Poly1305. Each record is bound to its user and record id, so encrypted records cannot be swapped between users or items.
 - **Keyring.** The `dataKey` is stored on the server only in wrapped (encrypted) form: once with `wrapKey` and once with a recovery code (160 bits) shown to the teacher when she signs up. Changing the password only re-wraps the key.
 - **Backups (.apunt file).** Contain the wrapped keyring and the encrypted records; they open only with the password or the recovery code, even if Supabase data is lost.
-- **"Remember this device"** is optional and off by default. If on, the `dataKey` is kept in IndexedDB wrapped with a non-exportable WebCrypto key; "Log out" deletes it.
+- **"Remember this device"** is on by default (the tutor uses her own devices) and she can untick it on a shared computer. If on, the `dataKey` is kept in IndexedDB wrapped with a non-exportable WebCrypto key; "Log out" deletes it, together with the local copy of the data.
 
-## 3. Server side (Supabase, planned)
+## 3. Server side (Supabase, live since Session 9)
 - Free plan, **EU region**. Email + password authentication.
 - **Row Level Security on every table:** each user can only read and write her own rows.
 - The server only stores encrypted blobs; even with full database access, notes and reports cannot be read.
 
 ## 4. Current state of the MVP
 - The prototype that runs today uses **fake data only** (25 invented students), stored in the browser. No real student data has been entered or uploaded anywhere.
-- Accounts, sync and the AI are not live yet. Testers (the real tutor) will use real data only once encryption and sync are connected.
+- Accounts and encrypted sync are live (Session 9). Each record (student, note, report, setting) is one encrypted row; the row id (for example `no:<random id>`) and its timestamps are visible to the server, the content is not.
 
 ## 5. Known limitations (honest list)
 - **Malicious code:** whoever controls the code that is served (Vercel or GitHub) could serve a version that steals the password. Mitigation: strict Content Security Policy; open question for later.

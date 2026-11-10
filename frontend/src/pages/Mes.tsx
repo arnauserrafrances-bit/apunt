@@ -8,6 +8,12 @@ export default function Mes() {
       <PageTitle title="Més" />
       <ul className="divide-y divide-line rounded-xl border border-line bg-card">
         <li>
+          <Link to="/compte" className="block px-4 py-4 hover:bg-hover">
+            <div className="font-bold">Compte</div>
+            <div className="text-muted">Entra per tenir les mateixes dades al mòbil i a l'ordinador</div>
+          </Link>
+        </li>
+        <li>
           <Link to="/alumnes" className="block px-4 py-4 hover:bg-hover">
             <div className="font-bold">Alumnes</div>
             <div className="text-muted">Llista de la classe i codis</div>

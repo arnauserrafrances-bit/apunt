@@ -37,6 +37,10 @@ function useStoreValue(repository: Repository, initial: AppState) {
 
     return {
       ...state,
+      /** L'estat sencer (per a la sincronització). */
+      snapshot: state,
+      /** Només per a la sincronització: aplica canvis baixats del núvol. */
+      replaceState: (fn: (s: AppState) => AppState) => setState(fn),
       isEmpty: !state.students.length && !state.areas.length && !state.notes.length,
 
       setTerm: (term: Term) => update(() => ({ currentTerm: term })),
