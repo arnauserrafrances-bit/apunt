@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { areaColor } from "../lib/areas";
 import { Link, useNavigate, useParams } from "react-router";
 import { ChatPanel, type Quote } from "../components/ChatPanel";
 import { ConfirmDialog } from "../components/ConfirmDialog";
@@ -77,10 +78,10 @@ function Steps({ current }: { current: 1 | 2 | 3 | 4 }) {
         const n = i + 1;
         return (
           <li key={label} className="flex items-center gap-2">
-            {i > 0 && <span className="text-line">—</span>}
+            {i > 0 && <span className="h-px w-5 bg-[#d6dce8]" aria-hidden="true" />}
             <span
-              className={`flex h-7 w-7 items-center justify-center rounded-full text-sm font-bold ${
-                n === current ? "bg-action text-white" : n < current ? "bg-hover text-ink" : "border border-line text-muted"
+              className={`flex h-7 w-7 items-center justify-center rounded-[8px] text-sm font-bold ${
+                n === current ? "bg-marker text-ink" : n < current ? "bg-neutral text-action" : "border border-line bg-card text-muted"
               }`}
             >
               {n < current ? "✓" : n}
@@ -97,6 +98,7 @@ function Steps({ current }: { current: 1 | 2 | 3 | 4 }) {
 
 export function InformeAlumne() {
   const store = useStore();
+  areaOrder = store.areas.map((a) => a.id);
   const { code } = useParams();
   const student = store.students.find((s) => s.code === code);
   const report = student ? store.reports[reportKey(student.id, store.currentTerm)] : undefined;
@@ -834,6 +836,16 @@ function Review({ student, report }: { student: Student; report: Report }) {
   );
 }
 
+/** Índex de color d'una àrea: el de la classe; les altres (qüestionari, valoració final), per l'id. */
+let areaOrder: string[] = [];
+function areaColorIndex(id: string): number {
+  const i = areaOrder.indexOf(id);
+  if (i >= 0) return i;
+  let h = 0;
+  for (const ch of id) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return h;
+}
+
 function countSentences(text: string): number {
   return text.split(/(?<=[.!?])\s+/).filter((s) => s.trim()).length;
 }
@@ -870,12 +882,16 @@ function AreaReportCard({
 
   const flags = report.editedText === undefined ? report.sentences.filter((s) => s.flag) : [];
   const count = countSentences(areaReportText(report));
+  const color = areaColor(areaColorIndex(area.id));
   const title = (
-    <div className="flex flex-wrap items-baseline justify-between gap-2">
-      <h3 className="text-xl font-bold">{area.name}</h3>
+    <div className="flex flex-wrap items-center justify-between gap-2">
+      <h3 className="flex items-center gap-2.5 text-lg font-bold">
+        <span className="h-3 w-3 shrink-0 rounded-[4px]" style={{ background: color.dot }} aria-hidden="true" />
+        {area.name}
+      </h3>
       <span className="text-sm text-muted">
         {report.approved ? (
-          <span className="font-bold text-ink">✓ Aprovada</span>
+          <span className="font-bold text-ok">✓ Aprovada</span>
         ) : flags.length ? (
           <span className="font-bold text-warn-ink">
             {plural(flags.length, "frase marcada", "frases marcades")}

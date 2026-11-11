@@ -3,12 +3,13 @@
 // 2. A l'ordinador o al mòbil es troba l'alumne pel nom i el nom es canvia pel codi (regla 1).
 // 3. La IA (/api/classify) reparteix el text en una nota per àrea.
 // 4. La tutora revisa les notes i les desa. Res es desa sense que ella ho vegi.
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { requestClassify } from "../lib/aiClassify";
 import { loadAccessCode, saveAccessCode } from "../lib/aiReport";
 import { analyze, countNameLeaks, pendingAsks, resolve, type Decision } from "../lib/anonymize";
 import { deanonymizeWithArticles, gendersFromTutorText, gendersWithNameFallback, guessGenders, mergeGenders } from "../lib/articles";
 import { fullName } from "../lib/names";
+import { initials } from "../lib/areas";
 import { speechSupported, startDictation, type Dictation } from "../lib/speech";
 import { todayIso } from "../lib/text";
 import { TERMS } from "../config";
@@ -40,7 +41,15 @@ function MicIcon({ className = "" }: { className?: string }) {
   );
 }
 
-export function VoiceNote({ below }: { below?: ReactNode }) {
+export function VoiceNote({
+  startSignal = 0,
+  onActiveChange,
+}: {
+  /** Cada valor nou (p. ex. Date.now()) comença una gravació. */
+  startSignal?: number;
+  /** Avisa quan hi ha una nota en curs (gravant, revisant o desant). */
+  onActiveChange?: (active: boolean) => void;
+}) {
   const store = useStore();
   const { students, areas, currentTerm } = store;
   const toast = useToast();
@@ -68,6 +77,15 @@ export function VoiceNote({ below }: { below?: ReactNode }) {
   }, [phase]);
 
   useEffect(() => () => dictation.current?.stop(), []);
+
+  useEffect(() => {
+    if (startSignal) record("");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [startSignal]);
+
+  useEffect(() => {
+    onActiveChange?.(phase !== "idle");
+  }, [phase, onActiveChange]);
 
   const reset = () => {
     dictation.current?.stop();
@@ -184,55 +202,80 @@ export function VoiceNote({ below }: { below?: ReactNode }) {
   };
 
   // ------------------------------------------------ pantalles
-  if (phase === "idle") {
-    return (
-      <div className="space-y-10">
-        <section className="flex flex-col items-center text-center">
-          <h2 className="mb-5 text-xl font-bold">Grava una nota de veu:</h2>
-          <button
-            type="button"
-            onClick={() => record("")}
-            disabled={!supported}
-            aria-label="Grava una nota de veu"
-            className="flex h-40 w-40 items-center justify-center rounded-full bg-action text-white shadow-lg transition hover:scale-[1.03] hover:bg-action-hover disabled:cursor-not-allowed disabled:opacity-45 sm:h-44 sm:w-44"
-          >
-            <MicIcon className="h-20 w-20" />
-          </button>
-          <p className="mt-4 max-w-md text-muted">
-            {supported
-              ? "Digues el nom de l'alumne i explica què has observat. Pots parlar de diverses àrees: Apunt la repartirà."
-              : "Aquest navegador no permet dictar. Fes servir Chrome o Safari, o crea la nota manualment."}
-          </p>
-        </section>
-        {below}
-      </div>
-    );
-  }
+  if (phase === "idle") return null;
 
   if (phase === "recording") {
+    // Mentre parla, el nom d'un alumne que el dictat reconeix es marca amb el retolador.
+    const live = analyze(text, students, "viu:");
+    const found = students.find((s) => s.id === mentioned[0]);
     return (
-      <section className="flex flex-col items-center text-center">
-        <h2 className="mb-1 text-xl font-bold">T'escolto…</h2>
-        <p className="mb-5 tabular-nums text-muted">{clock(seconds)}</p>
-        <button
-          type="button"
-          onClick={stop}
-          aria-label="Atura la gravació"
-          className="flex h-40 w-40 animate-pulse items-center justify-center rounded-full bg-danger text-white shadow-lg sm:h-44 sm:w-44"
-        >
-          <span className="h-14 w-14 rounded-lg bg-white" />
-        </button>
-        <p className="mt-3 font-bold">Toca per acabar</p>
-        <div className="card mt-6 min-h-28 w-full p-4 text-left text-lg leading-relaxed" aria-live="polite">
-          {text || interim ? (
-            <>
-              {text} <span className="text-muted">{interim}</span>
-            </>
-          ) : (
-            <span className="text-muted">Comença a parlar: per exemple «La Marta avui ha llegit molt bé…»</span>
-          )}
+      <section
+        aria-label="Gravant una nota de veu"
+        className="fixed inset-0 z-50 flex flex-col overflow-y-auto bg-action text-white"
+      >
+        <div className="mx-auto flex w-full max-w-md flex-1 flex-col px-5 pt-5 pb-8">
+          <div className="flex items-center justify-between">
+            <button type="button" onClick={reset} className="min-h-11 rounded-full bg-white/12 px-4 font-bold">
+              Cancel·la
+            </button>
+            <span className="text-lg font-bold tracking-wide tabular-nums">{clock(seconds)}</span>
+          </div>
+
+          <div className="flex flex-col items-center gap-4 pt-6">
+            <div className="relative flex h-[170px] w-[170px] items-center justify-center rounded-full bg-marker/12">
+              <span className="absolute inset-4 animate-ping rounded-full bg-marker/20 [animation-duration:2s]" aria-hidden="true" />
+              <div className="relative flex h-[130px] w-[130px] items-center justify-center rounded-full bg-marker/22">
+                <div className="flex h-[96px] w-[96px] items-center justify-center gap-1.5 rounded-full bg-marker">
+                  {[22, 44, 30, 52, 26, 38, 18].map((h, i) => (
+                    <span key={i} className="w-[6px] rounded-full bg-action" style={{ height: h * 0.75 }} />
+                  ))}
+                </div>
+              </div>
+            </div>
+            <h1 className="display text-[30px]">T'escolto…</h1>
+          </div>
+
+          <div className="mt-5 rounded-[24px] bg-card p-5 text-ink" aria-live="polite">
+            <p className="text-lg leading-relaxed">
+              {text || interim ? (
+                <>
+                  {live.map((seg, i) =>
+                    seg.kind === "text" ? (
+                      <span key={i}>{seg.text}</span>
+                    ) : (
+                      <mark key={i} className="rounded-md bg-marker px-1 text-ink">
+                        {seg.original}
+                      </mark>
+                    ),
+                  )}{" "}
+                  <span className="text-muted">{interim}</span>
+                </>
+              ) : (
+                <span className="text-muted">Comença a parlar: per exemple «La Marta avui ha llegit molt bé…»</span>
+              )}
+            </p>
+            {found && (
+              <p className="mt-3 flex items-center gap-2 text-sm text-soft">
+                <span className="avatar h-6 w-6 rounded-[8px] text-[11px]">{initials(found.firstName, found.lastName)}</span>
+                Alumne trobat: <strong className="text-ink">{found.code} · {fullName(found)}</strong>
+              </p>
+            )}
+          </div>
+          {error && <div className="warn-box mt-4">{error}</div>}
+
+          <div className="mt-auto flex flex-col gap-3 pt-6">
+            <button
+              type="button"
+              onClick={stop}
+              aria-label="Atura la gravació"
+              className="flex min-h-[60px] items-center justify-center gap-3 rounded-[20px] bg-marker font-display text-xl font-extrabold text-ink active:scale-[0.98]"
+            >
+              <span className="h-[18px] w-[18px] rounded-[5px] bg-ink" />
+              Acaba i reparteix per àrees
+            </button>
+            <p className="text-center text-sm text-white/75">Els noms es canvien per codis abans d'arribar a la IA.</p>
+          </div>
         </div>
-        {error && <div className="warn-box mt-4 w-full text-left">{error}</div>}
       </section>
     );
   }
