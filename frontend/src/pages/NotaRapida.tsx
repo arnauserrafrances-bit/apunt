@@ -6,7 +6,7 @@ import { StudentSearch } from "../components/StudentSearch";
 import { useToast } from "../components/Toast";
 import { VoiceNote } from "../components/VoiceNote";
 import { Icon, ProgressRing } from "../components/Brand";
-import { gendersFromTutorText, gendersWithNameFallback, nameWithArticle } from "../lib/articles";
+import { fullName } from "../lib/names";
 import { speechSupported } from "../lib/speech";
 import { TERMS } from "../config";
 import { areaColor, initials, shortAreaName } from "../lib/areas";
@@ -154,7 +154,6 @@ export default function NotaRapida() {
   const byArea = new Map(areas.map((a) => [a.id, a]));
   const areaIndex = new Map(areas.map((a, i) => [a.id, i]));
   const withNotes = new Set(notes.filter((n) => n.term === currentTerm).map((n) => n.studentId)).size;
-  const genders = gendersWithNameFallback(gendersFromTutorText(notes.map((n) => n.text), students), students);
   const hour = new Date().getHours();
   const greeting = hour < 14 ? "Bon dia!" : hour < 21 ? "Bona tarda!" : "Bona nit!";
   const today = new Date().toLocaleDateString("ca", { weekday: "long", day: "numeric", month: "long" });
@@ -205,14 +204,13 @@ export default function NotaRapida() {
           const a = byArea.get(n.areaId);
           if (!s || !a) return null;
           const c = areaColor(areaIndex.get(a.id) ?? 0);
-          const who = nameWithArticle(s.firstName, genders.get(s.code.toUpperCase()) ?? null);
           return (
             <li key={n.id} className="border-t border-[#EEF1F6]">
               <Link to={`/alumne/${s.code}`} className="flex items-center gap-3.5 px-4 py-3 hover:bg-hover md:px-5">
                 <span className="avatar h-10 w-10 text-sm md:h-9 md:w-9">{initials(s.firstName, s.lastName)}</span>
                 <span className="min-w-0 flex-1">
                   <span className="flex flex-wrap items-center gap-2">
-                    <strong className="text-[15px]">{who.charAt(0).toUpperCase() + who.slice(1)}</strong>
+                    <strong className="text-[15px]">{fullName(s)}</strong>
                     <span className="area-tag" style={{ background: c.bg, color: c.ink }}>
                       {shortAreaName(a.name)}
                     </span>
