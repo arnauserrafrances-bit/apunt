@@ -53,6 +53,8 @@ export function VoiceNote({ below }: { below?: ReactNode }) {
   const [chosenId, setChosenId] = useState<Id | null>(null);
   const [chosenByHand, setChosenByHand] = useState(false);
   const [accessCode, setAccessCode] = useState(loadAccessCode);
+  // El camp del codi es veu si no n'hi ha cap de guardat, si el guardat és incorrecte o si la tutora el vol canviar.
+  const [showCode, setShowCode] = useState(() => !loadAccessCode());
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [noteStudentId, setNoteStudentId] = useState<Id | null>(null);
   const dictation = useRef<Dictation | null>(null);
@@ -126,7 +128,6 @@ export function VoiceNote({ below }: { below?: ReactNode }) {
 
   const classify = async () => {
     if (!student || !canSend) return;
-    saveAccessCode(accessCode.trim());
     setError(null);
     setPhase("classifying");
     try {
@@ -136,6 +137,9 @@ export function VoiceNote({ below }: { below?: ReactNode }) {
         areas.map((a) => ({ areaId: a.id, name: a.name })),
         anonymized,
       );
+      // Només es guarda el codi quan ha funcionat.
+      saveAccessCode(accessCode.trim());
+      setShowCode(false);
       let key = 0;
       setNoteStudentId(student.id);
       setDrafts([
@@ -144,7 +148,14 @@ export function VoiceNote({ below }: { below?: ReactNode }) {
       ]);
       setPhase("result");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "No s'ha pogut repartir la nota.");
+      const message = e instanceof Error ? e.message : "No s'ha pogut repartir la nota.";
+      if (/codi d'accés/i.test(message)) {
+        // Codi equivocat: s'esborra i es torna a demanar.
+        saveAccessCode("");
+        setAccessCode("");
+        setShowCode(true);
+        setError("El codi d'accés a la IA no és correcte. Torna'l a escriure.");
+      } else setError(message);
       setPhase("review");
     }
   };
@@ -304,13 +315,24 @@ export function VoiceNote({ below }: { below?: ReactNode }) {
           </div>
         )}
 
-        {!loadAccessCode() && (
+        {showCode ? (
           <div>
             <label htmlFor="codi-veu" className="mb-2 block font-bold">
               Codi d'accés a la IA
             </label>
-            <input id="codi-veu" type="password" className="field" value={accessCode} onChange={(e) => setAccessCode(e.target.value)} />
+            <input
+              id="codi-veu"
+              type="password"
+              autoComplete="off"
+              className="field"
+              value={accessCode}
+              onChange={(e) => setAccessCode(e.target.value)}
+            />
           </div>
+        ) : (
+          <button type="button" className="text-sm text-muted underline underline-offset-4 hover:text-ink" onClick={() => setShowCode(true)}>
+            Canvia el codi d'accés a la IA
+          </button>
         )}
 
         {error && <div className="warn-box">{error}</div>}
