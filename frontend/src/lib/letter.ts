@@ -2,7 +2,7 @@
 // salutació, introducció, un paràgraf per àrea (sense títols) i comiat segons el trimestre.
 // La salutació, la introducció i el comiat són fixos: no els escriu la IA.
 import type { Student, Term } from "../types";
-import { deanonymizeWithArticles, guessGenders, nameWithArticle } from "./articles";
+import { deanonymizeWithArticles, gendersWithNameFallback, guessGenders, mergeGenders, nameWithArticle, type Gender } from "./articles";
 
 const ORDINAL: Record<Term, string> = { 1: "primer", 2: "segon", 3: "tercer" };
 
@@ -12,10 +12,17 @@ const FAREWELL: Record<Term, string> = {
   3: "Desitgem que gaudiu d'un bon estiu!",
 };
 
-export function buildLetter(student: Student, term: Term, paragraphs: string[], students: Student[]): string {
+export function buildLetter(
+  student: Student,
+  term: Term,
+  paragraphs: string[],
+  students: Student[],
+  /** Gènere segons els textos de la tutora: mana sobre els articles de la IA. */
+  tutorGenders: Map<string, Gender> = new Map(),
+): string {
   const all = paragraphs.join("\n");
-  const genders = guessGenders(all);
-  const who = nameWithArticle(student.firstName, genders.get(student.code.toUpperCase()) ?? null);
+  const genders = gendersWithNameFallback(mergeGenders(tutorGenders, guessGenders(all)), students);
+  const who = nameWithArticle(student.firstName, tutorGenders.get(student.code.toUpperCase()) ?? genders.get(student.code.toUpperCase()) ?? null);
   const intro =
     `Acabat el ${ORDINAL[term]} trimestre del curs, ens dirigim a vosaltres en aquest informe d'avaluació ` +
     `amb l'objectiu de compartir algunes informacions més detallades amb relació a l'adaptació, ` +
@@ -23,7 +30,7 @@ export function buildLetter(student: Student, term: Term, paragraphs: string[], 
   return [
     "Benvolguda família,",
     intro,
-    ...paragraphs.map((p) => deanonymizeWithArticles(p, students, genders)),
+    ...paragraphs.map((p) => deanonymizeWithArticles(p, students, genders, tutorGenders)),
     FAREWELL[term],
   ].join("\n\n");
 }

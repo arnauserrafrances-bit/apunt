@@ -79,13 +79,20 @@ export function guessGenders(text: string): Map<string, Gender> {
 }
 
 /** Canvia cada codi pel nom de pila, amb l'article i la preposició ben formats. */
-export function deanonymizeWithArticles(text: string, students: Student[], genders = guessGenders(text)): string {
+export function deanonymizeWithArticles(
+  text: string,
+  students: Student[],
+  genders = guessGenders(text),
+  /** Gènere segur (el que diu la tutora): mana fins i tot sobre l'article que ha escrit la IA. */
+  forced: Map<string, Gender> = new Map(),
+): string {
   const byCode = new Map(students.map((s) => [s.code.toUpperCase(), s]));
   return text.replace(PATTERN, (whole, token: string | undefined, rawCode: string, offset: number) => {
     const student = byCode.get(rawCode.toUpperCase());
     if (!student) return whole;
     const { prep, gender } = formOf(token);
-    const out = joinForm(prep, student.firstName, gender ?? genders.get(rawCode.toUpperCase()) ?? null);
+    const code = rawCode.toUpperCase();
+    const out = joinForm(prep, student.firstName, forced.get(code) ?? gender ?? genders.get(code) ?? null);
     const before = text.slice(0, offset);
     const startOfSentence = /(^|[.!?:]\s+|\n\s*)$/.test(before);
     const wasUpper = token ? /^\p{Lu}/u.test(token) : startOfSentence;
@@ -96,4 +103,67 @@ export function deanonymizeWithArticles(text: string, students: Student[], gende
 /** "l'Anna", "la Marta", "en Pau" (o només el nom si no se sap el gènere). */
 export function nameWithArticle(name: string, gender: Gender): string {
   return joinForm("", name, gender);
+}
+
+/**
+ * Gènere de cada alumne segons com l'anomena la tutora als seus textos («en Marc», «el Marc», «la Marta»,
+ * «d'en Marc»). Només compta el nom en majúscula, perquè «la pau» (paraula) no faci de «la Pau».
+ * Retorna codi d'alumne → gènere.
+ */
+export function gendersFromTutorText(texts: string[], students: Student[]): Map<string, Gender> {
+  const out = new Map<string, Gender>();
+  const all = texts.filter(Boolean).join("\n");
+  if (!all) return out;
+  for (const st of students) {
+    const name = st.firstName.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    if (!name) continue;
+    const re = new RegExp(`(?<![\\p{L}'’])(en|el|la|d${AP}en|de\\s+la|a\\s+en|a\\s+la|amb\\s+en|amb\\s+la)\\s*${name}(?![\\p{L}\\p{N}])`, "giu");
+    let f = 0;
+    let m = 0;
+    for (const hit of all.matchAll(re)) {
+      const matchedName = hit[0].slice(hit[0].length - st.firstName.trim().length);
+      if (!/^\p{Lu}/u.test(matchedName)) continue; // «la pau» és una paraula, no el nom
+      if (/la$/i.test(hit[1])) f++;
+      else m++;
+    }
+    if (f !== m) out.set(st.code.toUpperCase(), f > m ? "f" : "m");
+  }
+  return out;
+}
+
+/** Ajunta dues fonts de gènere: la primera mana quan sap la resposta. */
+export function mergeGenders(primary: Map<string, Gender>, fallback: Map<string, Gender>): Map<string, Gender> {
+  const out = new Map(fallback);
+  for (const [code, g] of primary) if (g) out.set(code, g);
+  return out;
+}
+
+// Últim recurs, si ni la tutora ni la IA no diuen el gènere: el nom. La majoria de noms de nena
+// acaben en -a; aquestes llistes recullen les excepcions habituals a Catalunya.
+const GIRLS_NOT_A = new Set(
+  ["abril", "mar", "neus", "iris", "noemí", "noemi", "ruth", "rut", "carmen", "inés", "ines", "isabel", "raquel", "mercè", "merce",
+   "montserrat", "elisabet", "nur", "sol", "ona", "estel", "llum", "aitana", "ainhoa", "naiara", "nerea", "zoe", "chloe", "candela",
+   "beatriz", "lourdes", "pilar", "dolors", "rocío", "rocio", "belén", "belen", "consuelo", "mireia", "maialen", "itziar", "inès", "joy",
+   "alison", "aylin", "yasmin", "jasmine", "jennifer", "evelyn", "miriam", "míriam", "ester", "esther", "judit", "judith", "elisenda",
+   "agnès", "agnes", "irene", "carme", "mariona", "laia", "nayeli", "sofía", "sofia", "maite", "noa", "ivet", "anaïs", "anais", "lis"]
+    .map((n) => n.normalize("NFC")),
+);
+const BOYS_A = new Set(["lluca", "luca", "nicola", "joshua", "bautista", "mustafa", "hamza", "musa", "akira"]);
+
+export function genderFromName(firstName: string): Gender {
+  const n = firstName.trim().split(/\s+/)[0]?.toLowerCase().normalize("NFC") ?? "";
+  if (!n) return null;
+  if (GIRLS_NOT_A.has(n)) return "f";
+  if (BOYS_A.has(n)) return "m";
+  return /a$/.test(n) ? "f" : "m";
+}
+
+/** Gènere per a cada alumne: el de les fonts que en saben (en ordre), i si no, pel nom. */
+export function gendersWithNameFallback(known: Map<string, Gender>, students: Student[]): Map<string, Gender> {
+  const out = new Map(known);
+  for (const s of students) {
+    const code = s.code.toUpperCase();
+    if (!out.get(code)) out.set(code, genderFromName(s.firstName));
+  }
+  return out;
 }

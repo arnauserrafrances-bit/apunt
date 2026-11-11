@@ -6,7 +6,8 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { requestClassify } from "../lib/aiClassify";
 import { loadAccessCode, saveAccessCode } from "../lib/aiReport";
-import { analyze, countNameLeaks, deanonymize, pendingAsks, resolve, type Decision } from "../lib/anonymize";
+import { analyze, countNameLeaks, pendingAsks, resolve, type Decision } from "../lib/anonymize";
+import { deanonymizeWithArticles, gendersFromTutorText, gendersWithNameFallback, guessGenders, mergeGenders } from "../lib/articles";
 import { fullName } from "../lib/names";
 import { speechSupported, startDictation, type Dictation } from "../lib/speech";
 import { todayIso } from "../lib/text";
@@ -140,11 +141,19 @@ export function VoiceNote({ below }: { below?: ReactNode }) {
       // Només es guarda el codi quan ha funcionat.
       saveAccessCode(accessCode.trim());
       setShowCode(false);
+      // Noms amb l'article bo («en Marc», «la Marta», «l'Anna»): primer com els anomena la tutora,
+      // després els articles que ha fet servir la IA.
+      const tutorGenders = gendersFromTutorText([text, ...store.notes.map((n) => n.text), ...Object.values(store.freeTexts)], students);
+      const genders = gendersWithNameFallback(
+        mergeGenders(tutorGenders, guessGenders([anonymized, ...out.notes.map((n) => n.text), ...out.other].join("\n"))),
+        students,
+      );
+      const withNames = (t: string) => deanonymizeWithArticles(t, students, genders, tutorGenders);
       let key = 0;
       setNoteStudentId(student.id);
       setDrafts([
-        ...out.notes.map((n) => ({ key: key++, areaId: n.areaId, text: deanonymize(n.text, students) })),
-        ...out.other.map((t) => ({ key: key++, areaId: "" as const, text: deanonymize(t, students) })),
+        ...out.notes.map((n) => ({ key: key++, areaId: n.areaId, text: withNames(n.text) })),
+        ...out.other.map((t) => ({ key: key++, areaId: "" as const, text: withNames(t) })),
       ]);
       setPhase("result");
     } catch (e) {

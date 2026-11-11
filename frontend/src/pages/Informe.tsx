@@ -12,7 +12,7 @@ import { useToast } from "../components/Toast";
 import { TERMS } from "../config";
 import { areaReportText, fakeAreaReport } from "../data/fakeReport";
 import { CLOSING_ID, CLOSING_NAME, loadAccessCode, requestAiReport, saveAccessCode } from "../lib/aiReport";
-import { deanonymizeWithArticles, guessGenders } from "../lib/articles";
+import { deanonymizeWithArticles, gendersFromTutorText, gendersWithNameFallback, guessGenders, mergeGenders } from "../lib/articles";
 import { keptRatio } from "../lib/learning";
 import { buildLetter } from "../lib/letter";
 import {
@@ -659,8 +659,17 @@ function Review({ student, report }: { student: Student; report: Report }) {
     });
 
   const paragraphs = ordered.map((r) => areaReportText(r));
-  const genders = guessGenders(paragraphs.join("\n"));
-  const display = (t: string) => (showNames ? deanonymizeWithArticles(t, store.students, genders) : t);
+  // Com anomena la tutora l'alumne als seus textos («en Marc», «la Marta») mana sobre els articles de la IA.
+  const tutorGenders = gendersFromTutorText(
+      [
+        ...store.notes.map((n) => n.text),
+        ...Object.values(store.freeTexts),
+        ...Object.values(store.answers).flatMap((a) => Object.values(a)),
+      ],
+      store.students,
+  );
+  const genders = gendersWithNameFallback(mergeGenders(tutorGenders, guessGenders(paragraphs.join("\n"))), store.students);
+  const display = (t: string) => (showNames ? deanonymizeWithArticles(t, store.students, genders, tutorGenders) : t);
   // Si es veuen els noms, el fragment marcat els porta: els tornem a canviar pels codis abans d'enviar-lo.
   const toCodes = (t: string) =>
     showNames
@@ -680,7 +689,7 @@ function Review({ student, report }: { student: Student; report: Report }) {
   const finalText = [
     `${fullName(student)} · ${TERMS[report.term]}`,
     "",
-    buildLetter(student, report.term, paragraphs, store.students),
+    buildLetter(student, report.term, paragraphs, store.students, tutorGenders),
   ].join("\n");
 
   const copy = async () => {

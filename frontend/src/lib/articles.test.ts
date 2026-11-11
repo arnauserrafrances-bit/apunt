@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { deanonymizeWithArticles, guessGenders, nameWithArticle, startsWithVowelSound } from "./articles";
+import { deanonymizeWithArticles, genderFromName, gendersFromTutorText, gendersWithNameFallback, guessGenders, nameWithArticle, startsWithVowelSound } from "./articles";
+import { buildLetter } from "./letter";
 import type { Student } from "../types";
 
 const s = (code: string, firstName: string): Student => ({ id: code, code, firstName, lastName: "X" });
@@ -59,5 +60,38 @@ describe("helpers", () => {
   it("nameWithArticle", () => {
     expect(nameWithArticle("Marta", "f")).toBe("la Marta");
     expect(nameWithArticle("Anna", null)).toBe("l'Anna");
+  });
+});
+
+describe("Session 9 fixes: «L'Marc» and missing articles", () => {
+  const cls = [s("A-03", "Marc"), s("A-01", "Marta"), s("A-02", "Anna"), s("A-04", "Pau"), s("A-05", "Abril")];
+  it("never puts an apostrophe before a consonant: l'A-03 → en Marc / la Marta", () => {
+    const g = gendersWithNameFallback(new Map(), cls);
+    expect(deanonymizeWithArticles("L'A-03 no té un comportament respectuós a classe.", cls, g)).toBe("En Marc no té un comportament respectuós a classe.");
+    expect(deanonymizeWithArticles("L'A-03 està baixant el seu nivell.", cls, g)).toBe("En Marc està baixant el seu nivell.");
+    expect(deanonymizeWithArticles("Ha parlat amb l'A-01.", cls, g)).toBe("Ha parlat amb la Marta.");
+    expect(deanonymizeWithArticles("L'A-02 llegeix.", cls, g)).toBe("L'Anna llegeix.");
+  });
+  it("learns the gender from how the tutor names the student", () => {
+    const t = gendersFromTutorText(["En Marc ha arribat tard.", "Avui la Abril ha llegit.", "Hem fet el projecte de la pau."], cls);
+    expect(t.get("A-03")).toBe("m");
+    expect(t.get("A-05")).toBe("f");
+    expect(t.has("A-04")).toBe(false); // «la pau» és una paraula
+  });
+  it("the tutor's word beats a wrong article from the AI", () => {
+    const tutor = gendersFromTutorText(["El Marc juga a futbol."], cls);
+    expect(deanonymizeWithArticles("la A-03 juga.", cls, new Map(), tutor)).toBe("En Marc juga.");
+  });
+  it("guesses from the name only as a last resort", () => {
+    expect(genderFromName("Marc")).toBe("m");
+    expect(genderFromName("Marta")).toBe("f");
+    expect(genderFromName("Abril")).toBe("f");
+    expect(genderFromName("Lluca")).toBe("m");
+    expect(genderFromName("Èlia")).toBe("f");
+  });
+  it("the letter never leaves a name without article", () => {
+    const letter = buildLetter(cls[0], 1, ["L'A-03 és puntual i educat."], cls);
+    expect(letter).toContain("l'evolució que en Marc ha fet");
+    expect(letter).toContain("En Marc és puntual i educat.");
   });
 });
