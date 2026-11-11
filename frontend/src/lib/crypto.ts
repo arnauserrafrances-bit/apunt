@@ -251,3 +251,23 @@ export function decryptItem<T = unknown>(dataKey: Uint8Array, userId: string, it
   if (!bytes) throw new CryptoError("No s'han pogut desxifrar les dades.");
   return JSON.parse(sodium.to_string(bytes)) as T;
 }
+
+// ------------------------------------------------------------ Recuperació del compte
+
+const KDF_CTX_RECOVERY = "apuntrec";
+
+/**
+ * Prova que algú té la clau de dades (per exemple, perquè l'ha obert amb el codi de recuperació).
+ * El servidor només en guarda el hash (recoveryVerifier): amb el hash no es pot fer la prova.
+ */
+export function recoveryProof(dataKey: Uint8Array): string {
+  const proof = sodium.crypto_kdf_derive_from_key(KEY_BYTES, 3, KDF_CTX_RECOVERY, dataKey);
+  const out = b64(proof);
+  sodium.memzero(proof);
+  return out;
+}
+
+/** SHA-256 (hex) de la prova: és el que es guarda al servidor. */
+export function recoveryVerifier(dataKey: Uint8Array): string {
+  return sodium.to_hex(sodium.crypto_hash_sha256(sodium.from_string(recoveryProof(dataKey))));
+}

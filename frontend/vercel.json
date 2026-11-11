@@ -8,6 +8,9 @@
     },
     "api/classify.ts": {
       "maxDuration": 60
+    },
+    "api/recover.ts": {
+      "maxDuration": 30
     }
   },
   "rewrites": [

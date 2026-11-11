@@ -29,6 +29,8 @@ interface SyncValue {
   clearRecovery: () => void;
   signUp: (email: string, password: string, remember: boolean) => Promise<void>;
   signIn: (email: string, password: string, remember: boolean) => Promise<void>;
+  /** «He oblidat la contrasenya»: codi de recuperació + contrasenya nova, i entra. */
+  recover: (email: string, code: string, newPassword: string, remember: boolean) => Promise<void>;
   unlock: (password: string, remember: boolean) => Promise<void>;
   choose: (mode: "merge" | "account") => Promise<void>;
   syncNow: () => Promise<void>;
@@ -126,6 +128,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       session.current = u;
       setEmail(u.email);
       if (remember) await rememberDataKey(u.userId, u.dataKey);
+      void loadCloud().then((c) => c.ensureRecovery(u)).catch(() => {});
       const meta = loadMeta(u.userId);
       if (meta.cursor) return run();
       setStatus("syncing");
@@ -208,6 +211,12 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       },
       signIn: async (e, pw, remember) => {
         const u = await (await loadCloud()).signIn(e, pw);
+        await start(u, remember);
+      },
+      recover: async (e, code, pw, remember) => {
+        const cloud = await loadCloud();
+        await cloud.recover(e, code, pw);
+        const u = await cloud.signIn(e, pw);
         await start(u, remember);
       },
       unlock: async (pw, remember) => {

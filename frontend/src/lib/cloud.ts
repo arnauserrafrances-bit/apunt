@@ -3,7 +3,20 @@
 // (authKey); l'altra obre la clau de dades, que és la que xifra tot el que es puja.
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { SUPABASE_ANON_KEY, SUPABASE_URL } from "../config";
-import { createKeyring, CryptoError, decryptItem, deriveKeys, encryptItem, normalizeEmail, openKeyring, type Keyring } from "./crypto";
+import {
+  createKeyring,
+  CryptoError,
+  decryptItem,
+  deriveKeys,
+  encryptItem,
+  normalizeEmail,
+  openKeyring,
+  recoveryProof,
+  recoveryVerifier,
+  rewrapForNewPassword,
+  unlockWithRecovery,
+  type Keyring,
+} from "./crypto";
 import type { Backend, Cipher, PushRow, RemoteRow } from "./vault";
 
 let client: SupabaseClient | null = null;
@@ -56,7 +69,9 @@ export async function signUp(emailRaw: string, password: string): Promise<NewAcc
   const { data, error } = await sb.auth.signUp({ email, password: acc.authKey });
   if (error) throw new Error(friendly(error.message));
   if (!data.session || !data.user) throw new Error("El compte s'ha creat però cal confirmar el correu. Desactiva «Confirm email» a Supabase.");
-  const { error: kErr } = await sb.from("keyrings").insert({ user_id: data.user.id, keyring: acc.keyring });
+  const { error: kErr } = await sb
+    .from("keyrings")
+    .insert({ user_id: data.user.id, keyring: acc.keyring, recovery_verifier: recoveryVerifier(acc.dataKey) });
   if (kErr) throw new Error(friendly(kErr.message));
   return { userId: data.user.id, email, dataKey: acc.dataKey, recoveryCode: acc.recoveryCode };
 }
@@ -134,4 +149,41 @@ export function supabaseBackend(userId: string): Backend {
       return out;
     },
   };
+}
+
+/**
+ * Comptes creats abans que existís la recuperació: en entrar, es guarda el hash de la prova
+ * perquè el codi de recuperació també serveixi per canviar la contrasenya.
+ */
+export async function ensureRecovery(u: Unlocked): Promise<void> {
+  const sb = supabase();
+  const { data } = await sb.from("keyrings").select("recovery_verifier").eq("user_id", u.userId).maybeSingle();
+  if (data && !data.recovery_verifier) {
+    await sb.from("keyrings").update({ recovery_verifier: recoveryVerifier(u.dataKey) }).eq("user_id", u.userId);
+  }
+}
+
+async function recoverCall(body: Record<string, unknown>): Promise<Record<string, unknown>> {
+  let r: Response;
+  try {
+    r = await fetch("/api/recover", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  } catch {
+    throw new Error("No hi ha connexió amb el servidor.");
+  }
+  if (r.status === 404 && !(r.headers.get("content-type") ?? "").includes("json"))
+    throw new Error("La recuperació només funciona a la versió publicada (Vercel).");
+  const data = (await r.json().catch(() => ({}))) as Record<string, unknown>;
+  if (!r.ok) throw new Error(typeof data.error === "string" ? data.error : `Error del servidor (${r.status}).`);
+  return data;
+}
+
+/** «He oblidat la contrasenya»: amb el codi de recuperació es posa una contrasenya nova. Les dades no es perden. */
+export async function recover(emailRaw: string, code: string, newPassword: string): Promise<void> {
+  const email = normalizeEmail(emailRaw);
+  if (newPassword.length < MIN_PASSWORD) throw new Error(`La contrasenya ha de tenir com a mínim ${MIN_PASSWORD} caràcters.`);
+  const started = await recoverCall({ step: "start", email });
+  const stub: Keyring = { version: Number(started.version) || 1, wrappedPw: "", wrappedRecovery: String(started.wrappedRecovery ?? "") };
+  const dataKey = await unlockWithRecovery(stub, code); // codi equivocat → CryptoError amb missatge clar
+  const { keyring, authKey } = await rewrapForNewPassword(stub, dataKey, email, newPassword);
+  await recoverCall({ step: "finish", email, proof: recoveryProof(dataKey), authKey, wrappedPw: keyring.wrappedPw });
 }

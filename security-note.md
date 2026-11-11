@@ -30,6 +30,7 @@ Only standard primitives from libsodium and WebCrypto; no home-made cryptography
 ## 5. Known limitations (honest list)
 - **Malicious code:** whoever controls the code that is served (Vercel or GitHub) could serve a version that steals the password. Mitigation: strict Content Security Policy; open question for later.
 - **Metadata:** the server can see the teacher's email, how many records she has, their size and when they change — but not their content.
+- **Forgot password:** the recovery code opens the data key on the device; the device sends a proof (derived from the data key) that the server checks against its SHA-256 hash, plus the new derived login key and the re-wrapped keyring. The server function uses Supabase's secret key (Vercel environment variable only) and never sees the code, the password or the data. The data key does not change, so other devices keep working. The «start» step reveals whether an email has an account (accepted for now).
 - **Lost password + lost recovery code = lost data.** The server cannot recover it. This is the price of end-to-end encryption.
 - **Name check:** it only knows names in the class list. Nicknames, siblings or parents are not caught unless the teacher adds them; the preview step is the safety net.
 - **Email confirmation** is off temporarily for MVP testers (Supabase free email limit); it comes back with our own SMTP.

@@ -155,3 +155,14 @@ describe("clauer", () => {
     expect(await unlockWithPassword(keyring, EMAIL, PASSWORD)).toEqual(dataKey);
   }, 30_000);
 });
+
+describe("recovery proof", () => {
+  it("is the same from the password and from the recovery code, and the server only keeps its hash", async () => {
+    const { createKeyring, unlockWithRecovery, recoveryProof, recoveryVerifier } = await import("./crypto");
+    const acc = await createKeyring("tutora@example.com", "una-contrasenya-llarga", { opsLimit: 1, memLimitBytes: 8 * 1024 * 1024 });
+    const viaCode = await unlockWithRecovery(acc.keyring, acc.recoveryCode);
+    expect(recoveryProof(viaCode)).toBe(recoveryProof(acc.dataKey));
+    expect(recoveryVerifier(acc.dataKey)).toMatch(/^[0-9a-f]{64}$/);
+    expect(recoveryVerifier(acc.dataKey)).not.toContain(recoveryProof(acc.dataKey));
+  });
+});

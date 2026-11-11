@@ -2,6 +2,7 @@
 import { useState, type FormEvent } from "react";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { PageTitle } from "../components/Layout";
+import { useToast } from "../components/Toast";
 import { MIN_PASSWORD } from "../config";
 import { useSync } from "../store/SyncProvider";
 
@@ -43,13 +44,15 @@ function RememberBox({ value, onChange }: { value: boolean; onChange: (v: boolea
 
 function AuthForms() {
   const sync = useSync();
-  const [mode, setMode] = useState<"in" | "up">("in");
+  const [mode, setMode] = useState<"in" | "up" | "forgot">("in");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [repeat, setRepeat] = useState("");
   const [remember, setRemember] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  if (mode === "forgot") return <Forgot initialEmail={email} onBack={() => setMode("in")} />;
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -137,6 +140,102 @@ function AuthForms() {
         <button type="submit" className="btn btn-primary w-full py-3 text-lg" disabled={busy}>
           {busy ? "Un moment…" : mode === "up" ? "Crea el compte" : "Entra"}
         </button>
+        {mode === "in" && (
+          <button
+            type="button"
+            className="block w-full text-center text-muted underline underline-offset-4 hover:text-ink"
+            onClick={() => {
+              setMode("forgot");
+              setError(null);
+            }}
+          >
+            He oblidat la contrasenya
+          </button>
+        )}
+      </form>
+    </div>
+  );
+}
+
+function Forgot({ initialEmail, onBack }: { initialEmail: string; onBack: () => void }) {
+  const sync = useSync();
+  const toast = useToast();
+  const [email, setEmail] = useState(initialEmail);
+  const [code, setCode] = useState("");
+  const [password, setPassword] = useState("");
+  const [repeat, setRepeat] = useState("");
+  const [remember, setRemember] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    if (password !== repeat) return setError("Les dues contrasenyes no coincideixen.");
+    setBusy(true);
+    try {
+      await sync.recover(email, code, password, remember);
+      toast({ message: "Contrasenya canviada. Ja has entrat amb la nova." });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No s'ha pogut canviar la contrasenya.");
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <button type="button" className="btn btn-ghost -ml-3" onClick={onBack}>
+        ← Torna a entrar
+      </button>
+      <div className="card space-y-2 p-5">
+        <p className="font-bold">He oblidat la contrasenya</p>
+        <p className="text-muted">
+          Necessites el <strong className="text-ink">codi de recuperació</strong> que vas guardar en crear el compte (8 grups de 4
+          lletres i números). Amb ell pots posar una contrasenya nova sense perdre cap dada. El codi continua servint després.
+        </p>
+      </div>
+      <form className="space-y-4" onSubmit={(e) => void submit(e)}>
+        <div>
+          <label htmlFor="r-email" className="mb-1 block font-bold">
+            Correu electrònic
+          </label>
+          <input id="r-email" type="email" autoComplete="email" required className="field" value={email} onChange={(e) => setEmail(e.target.value)} />
+        </div>
+        <div>
+          <label htmlFor="r-code" className="mb-1 block font-bold">
+            Codi de recuperació
+          </label>
+          <input
+            id="r-code"
+            required
+            autoComplete="off"
+            autoCapitalize="characters"
+            spellCheck={false}
+            placeholder="XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX"
+            className="field font-mono tracking-wider"
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
+          />
+        </div>
+        <div>
+          <label htmlFor="r-pw" className="mb-1 block font-bold">
+            Contrasenya nova
+          </label>
+          <input id="r-pw" type="password" autoComplete="new-password" required minLength={MIN_PASSWORD} className="field" value={password} onChange={(e) => setPassword(e.target.value)} />
+          <p className="mt-1 text-sm text-muted">Com a mínim {MIN_PASSWORD} caràcters.</p>
+        </div>
+        <div>
+          <label htmlFor="r-pw2" className="mb-1 block font-bold">
+            Repeteix la contrasenya nova
+          </label>
+          <input id="r-pw2" type="password" autoComplete="new-password" required className="field" value={repeat} onChange={(e) => setRepeat(e.target.value)} />
+        </div>
+        <RememberBox value={remember} onChange={setRemember} />
+        {error && <div className="warn-box">{error}</div>}
+        <button type="submit" className="btn btn-primary w-full py-3 text-lg" disabled={busy}>
+          {busy ? "Un moment…" : "Canvia la contrasenya i entra"}
+        </button>
+        <p className="text-sm text-muted">Si has perdut la contrasenya i també el codi, no es poden recuperar les dades: ningú no les pot obrir.</p>
       </form>
     </div>
   );
@@ -202,6 +301,7 @@ function Unlock() {
       <input type="password" autoComplete="current-password" aria-label="Contrasenya" className="field" value={password} onChange={(e) => setPassword(e.target.value)} />
       <RememberBox value={remember} onChange={setRemember} />
       {error && <div className="warn-box">{error}</div>}
+      <p className="text-sm text-muted">Si l'has oblidada, tanca la sessió i fes servir «He oblidat la contrasenya».</p>
       <div className="flex flex-wrap gap-3">
         <button type="submit" className="btn btn-primary px-6" disabled={busy || !password}>
           {busy ? "Un moment…" : "Obre les dades"}

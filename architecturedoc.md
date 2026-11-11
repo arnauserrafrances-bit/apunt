@@ -41,7 +41,7 @@ Apunt (working name). A tool for primary tutors in Catalonia to write term repor
 - Catalan only, one teacher, one class. We gain: we build for the real user we have, not for an imagined school.
 - The final report is plain text to copy and paste; no Word or PDF export.
 - Voice notes use the browser's dictation for now: the audio (with the student's name) is turned into text by Google (Chrome) or Apple (Safari), not by Apunt's AI. After that, the name is replaced by the code on the device and only the code goes to Claude. We gain: it works today on computer and phone, in Catalan, for free. In the downloadable app it will move to the phone's on-device recognition, so the audio never leaves the phone.
-- Without an account, data lives only in the tutor's browser. With an account it is in Supabase, but encrypted: if she loses both her password and her recovery code, nobody can recover it. There is no «forgot password» screen yet (next step: reset with the recovery code).
+- Without an account, data lives only in the tutor's browser. With an account it is in Supabase, but encrypted: if she loses both her password and her recovery code, nobody can recover it. «I forgot my password» works with the recovery code: the code opens the data key on the device, a new password wraps it again, and a server function (`api/recover.ts`, with Supabase's secret key, only in Vercel) checks a proof against a stored hash and changes the Supabase password. The server never sees the code, the password or the data.
 - «Remember me on this device» is on by default (the tutor uses her own computer and phone); she unticks it on a shared computer.
 
 ## Plan
@@ -51,7 +51,7 @@ Next, in this order (riskiest first):
 1. (Built in Session 7) Learn the tutor's preferences from her chat corrections, with her approval: see "Learning loop" below. Next: collect real numbers from her next reports.
 2. (Built in Session 9) Voice notes: big microphone in «Nota ràpida»; the tutor says the student's name and what she saw; Apunt finds the student, replaces names with codes, the AI splits the note by area, and she reviews before saving. Next: test it with her for two weeks on her phone: does she really record notes, and does the report take less time?
 3. Test with more tutors (her school's staff), using the school's standard model per course and term.
-4. (Built in Session 9) Accounts and encrypted sync between computer and phone. Next: «forgot password» with the recovery code → phone app (PWA, then downloadable app) → clean-up.
+4. (Built in Session 9) Accounts and encrypted sync between computer and phone. «Forgot password» with the recovery code is built too. Next: phone app (PWA, then downloadable app) → clean-up.
 
 ## Workflow and evals (Session 8)
 Workflow for one report:
