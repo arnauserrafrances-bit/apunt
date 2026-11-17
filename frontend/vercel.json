@@ -11,6 +11,9 @@
     },
     "api/recover.ts": {
       "maxDuration": 30
+    },
+    "api/judge.ts": {
+      "maxDuration": 60
     }
   },
   "rewrites": [
