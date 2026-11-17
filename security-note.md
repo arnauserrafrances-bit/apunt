@@ -35,3 +35,6 @@ Only standard primitives from libsodium and WebCrypto; no home-made cryptography
 - **Name check:** it only knows names in the class list. Nicknames, siblings or parents are not caught unless the teacher adds them; the preview step is the safety net.
 - **Email confirmation** is off temporarily for MVP testers (Supabase free email limit); it comes back with our own SMTP.
 - **Email change is blocked** in the MVP, because the Argon2id salt is derived from the email.
+
+## AI judge (Session 9)
+`api/judge.ts` needs the same access code as the other AI functions and only receives text with student codes (A-01), built from invented eval cases. It is not connected to the tutor's data and never stores anything. The prompt is limited to 40,000 characters.

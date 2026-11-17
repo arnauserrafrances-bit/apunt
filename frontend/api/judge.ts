@@ -45,13 +45,14 @@ export async function runJudge(prompt: string, env: Record<string, string | unde
   const r = await fetch(API_URL, {
     method: "POST",
     headers: { "content-type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
-    body: JSON.stringify({ model, max_tokens: 1500, messages: [{ role: "user", content: prompt }] }),
+    body: JSON.stringify({ model, max_tokens: 4000, messages: [{ role: "user", content: prompt }] }),
   });
   if (!r.ok) {
     const detail = (await r.json().catch(() => null)) as { error?: { message?: string } } | null;
     throw new Error(`Error de l'API (${r.status})${detail?.error?.message ? `: ${detail.error.message}` : "."}`);
   }
-  const data = (await r.json()) as { content?: { type: string; text?: string }[] };
+  const data = (await r.json()) as { stop_reason?: string; content?: { type: string; text?: string }[] };
+  if (data.stop_reason === "max_tokens") throw new Error("La resposta del jutge era massa llarga i s'ha tallat.");
   const text = (data.content ?? []).filter((c) => c.type === "text").map((c) => c.text ?? "").join("");
   if (!text.trim()) throw new Error("La IA ha retornat una resposta buida.");
   return { ...parseVerdict(text), model };
